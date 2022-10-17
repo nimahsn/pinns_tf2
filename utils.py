@@ -46,6 +46,23 @@ def simulate_burgers(n_samples, boundary_samples = None, random_seed = 42, dtype
     
     return (tx_samples, y_samples), (tx_init, y_init), (tx_boundary, y_boundary)
 
+
+def simulate_wave(n_samples, dimension, psi_function, phi_function, random_seed = 42, dtype=tf.float32):
+    """
+    todo
+    To be implemented
+    """
+    pass    
+
+
+def plot_wave_model(model, save_path = None):
+    """
+    todo
+    To be implemented
+    """
+    pass
+
+
 def plot_burgers_model(model, save_path = None):
     """
     Plot the model predictions for the Burgers equation.

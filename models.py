@@ -4,7 +4,6 @@ import numpy as np
 import time
 
 
-
 class BurgersPinn(keras.Model):
   def __init__(self, network, nu, n_inputs=2, n_outputs=1):
     super().__init__()
@@ -114,3 +113,102 @@ class BurgersPinn(keras.Model):
     
     outputs = keras.layers.Dense(n_outputs, kernel_initializer=initialization)(x)
     return keras.Model(inputs=[inputs], outputs = [outputs])
+
+
+  class WavePinn(keras.Model):
+    """
+    PINN model for the wave equation.
+    """
+
+    def __init__(self, network, dimension, c) -> None:
+      super().__init__()
+      self.network = network
+      self.dimension = dimension
+      self.c = c
+
+    
+    @tf.function
+    def input_gradient(self, x):
+      with tf.GradientTape(persistent=True) as g1:
+        # Turn x into a list of n tensors of shape (k,)
+        x_unstacked = tf.unstack(x, axis=1)
+        g1.watch(x_unstacked)
+
+        with tf.GradientTape() as g2:
+          # Re-stack x before passing it into f
+          x_stacked = tf.stack(x_unstacked, axis=1) # shape = (k,n)
+          g2.watch(x_stacked)
+          f_x = self.network(x_stacked) # shape = (k,)
+        
+        # Calculate gradient of f with respect to x
+        df_dx = g2.gradient(f_x, x_stacked) # shape = (k,n)
+        # Turn df/dx into a list of n tensors of shape (k,)
+        df_dx_unstacked = tf.unstack(df_dx, axis=1)
+
+      # Calculate 2nd derivatives
+      d2f_dx2 = []
+      for df_dxi,xi in zip(df_dx_unstacked, x_unstacked):
+        # Take 2nd derivative of each dimension separately:
+        #   d/dx_i (df/dx_i)
+        d2f_dx2.append(g1.gradient(df_dxi, xi))
+      
+      # Stack 2nd derivates
+      d2f_dx2_stacked = tf.stack(d2f_dx2, axis=1) # shape = (k,n)
+      
+      return d2f_dx2_stacked
+    
+    
+    def call(self, inputs):
+      """
+      Performs forward pass of the model, computing the PDE residual and the initial and boundary conditions.
+
+      Args:
+        inputs: A list of tensors, where the first tensor is the equation data,
+          and the second tensor is the phi and psi initial condition data.
+
+      Returns:
+
+      """
+
+      tx_equation = inputs[0]
+      tx_init = inputs[1]
+
+      d2f_dx2 = self.input_gradient(tx_equation)
+      d2f_dt2 = d2f_dx2[..., 0]
+      d2f_dx2 = d2f_dx2[..., 1:]
+      
+      # Calculate PDE residual
+      pde_residual = d2f_dt2 - (self.c**2) * d2f_dx2
+
+      with tf.GradientTape() as g:
+        g.watch(tx_init)
+        u_phi = self.network(tx_init)
+      du_dt_psi = g.gradient(u_phi, tx_init)[..., 0]
+
+      return pde_residual, u_phi, du_dt_psi
+
+    
+  def fit(self, inputs, labels, epochs, optimizer, progress_interval=500):
+    """
+    Train the model with the given inputs and optimizer.
+
+    Args:
+      inputs: A list of tensors, where the first tensor is the equation data,
+        the second tensor is the initial condition data, and the third tensor
+        is the boundary condition data.
+      labels: A list of tensors, where each tensor is the corresponding label
+      for the corresponding input tensor.
+      epochs: The number of epochs to train for.
+      optimizer : The optimizer to use for training.
+      progress_interval: The number of epochs between each progress report.
+    """
+    start_time = time.time()
+    for epoch in range(epochs):
+      with tf.GradientTape() as tape:
+        residual, u_phi, du_dt_psi = self.call(inputs)
+        loss = tf.reduce_mean(residual**2) + tf.reduce_mean(tf.square(u_phi - labels[1])) + tf.reduce_mean(tf.square(du_dt_psi - labels[2]))
+
+      grads = tape.gradient(loss, self.trainable_weights)
+      optimizer.apply_gradients(zip(grads, self.trainable_weights))
+      if epoch % progress_interval == 0:
+        print(f"Epoch: {epoch} Loss: {loss.numpy():.4f} Total Elapsed Time: {time.time() - start_time:.2f}")
