@@ -47,13 +47,54 @@ def simulate_burgers(n_samples, boundary_samples = None, random_seed = 42, dtype
     return (tx_samples, y_samples), (tx_init, y_init), (tx_boundary, y_boundary)
 
 
-def simulate_wave(n_samples, dimension, psi_function, phi_function, random_seed = 42, dtype=tf.float32):
+def simulate_wave(n_samples, dimension, phi_function, psi_function, boundary_function_start, boundary_function_end, length = 1, time = 1, random_seed = 42, dtype=tf.float32):
     """
-    todo
-    To be implemented
+    Simulate the wave equation in 1D or 2D with a given initial condition and Dirichlet boundary conditions.
+    Args:
+        n_samples (int): number of samples to generate
+        dimension (int): dimension of the wave equation. Either 1 or 2.
+        phi_function (function): Function that returns the initial condition of the wave equation on u.
+        psi_function (function): Function that returns the initial condition of the wave equation on u_t.
+        boundary_function_start (function): Function that returns the boundary condition of the wave equation on u at the start of the domain.
+        boundary_function_end (function): Function that returns the boundary condition of the wave equation on u at the end of the domain.
+        length (float, optional): Length of the domain. Defaults to 1.
+        time (float, optional): Time frame of the simulation. Defaults to 1.
+        random_seed (int, optional): Random seed for reproducibility. Defaults to 42.
+        dtype (tf.dtype, optional): Data type of the samples. Defaults to tf.float32.
+    
     """
-    pass    
+    
+    r = np.random.RandomState(random_seed)
+    t = r.uniform(0, time, (n_samples, 1))
+    x = r.uniform(0, length, (n_samples, dimension))
+    tx_eqn = np.concatenate((t, x), axis = 1)
 
+    t_init = np.zeros((n_samples, 1))
+    x_init = r.uniform(0, length, (n_samples, dimension))
+    tx_init = np.concatenate((t_init, x_init), axis = 1)
+
+    t_boundary = r.uniform(0, time, (n_samples, 1))
+    x_boundary = np.ones((n_samples//2, 1))*length
+    x_boundary = np.append(x_boundary, np.zeros((n_samples - n_samples//2, 1)), axis=0)
+    tx_boundary = np.concatenate((t_boundary, x_boundary), axis = 1)
+
+    tx_eqn = tf.convert_to_tensor(tx_eqn, dtype = dtype)
+    tx_init = tf.convert_to_tensor(tx_init, dtype = dtype)
+    tx_boundary = tf.convert_to_tensor(tx_boundary, dtype = dtype)
+
+    y_eqn = np.zeros((n_samples, 1))
+    y_phi = phi_function(tx_init)
+    y_psi = psi_function(tx_eqn)
+    y_boundary = boundary_function_start(t_boundary[:n_samples//2])
+    y_boundary = np.append(y_boundary, boundary_function_end(t_boundary[n_samples//2:]), axis=0)
+
+    y_eqn = tf.convert_to_tensor(y_eqn, dtype = dtype)
+    y_phi = tf.convert_to_tensor(y_phi, dtype = dtype)
+    y_psi = tf.convert_to_tensor(y_psi, dtype = dtype)
+    y_boundary = tf.convert_to_tensor(y_boundary, dtype = dtype)
+
+    return (tx_eqn, y_eqn), (tx_init, y_phi, y_psi), (tx_boundary, y_boundary)
+    
 
 def plot_wave_model(model, save_path = None):
     """
