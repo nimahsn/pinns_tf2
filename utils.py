@@ -2,6 +2,7 @@ from tensorflow import keras
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
+from mpl_toolkits.mplot3d import Axes3D
 import tensorflow as tf
 
 
@@ -96,12 +97,45 @@ def simulate_wave(n_samples, dimension, phi_function, psi_function, boundary_fun
     return (tx_eqn, y_eqn), (tx_init, y_phi, y_psi), (tx_boundary, y_boundary)
     
 
-def plot_wave_model(model, save_path = None):
+def plot_wave_model(model, length, time, save_path = None):
     """
     todo
-    To be implemented
     """
-    pass
+    
+    def phi(tx, c=1, k=2, sd=0.5):
+        t = tx[..., 0, None]
+        x = tx[..., 1, None]
+        z = k*x - (c*k)*t
+        return tf.sin(z) * tf.exp(-(0.5*z/sd)**2)
+    # du0/dt
+    def psi(tx):
+        with tf.GradientTape() as g:
+            g.watch(tx)
+            u = phi(tx)
+        du_dt = g.batch_jacobian(u, tx)[..., 0]
+        return du_dt
+
+    t, x = np.meshgrid(np.linspace(0, time, 100), np.linspace(0, length, 100))
+    tx = np.stack([t.flatten(), x.flatten()], axis=-1)
+    u = model.predict(tx, batch_size=1000)
+    print(u.shape)
+    # u = u.reshape(t.shape)
+
+    # fig = go.Figure(data=[go.Surface(x = t, y = x, z=u.reshape(t.shape))])
+    # fig.update_traces(contours_z=dict(show=True, usecolormap=True,
+    #                                 highlightcolor="limegreen", project_z=True))
+    # fig.update_layout(title='Mt Bruno Elevation', autosize=False,
+    #                 scene_camera_eye=dict(x=1.87, y=0.88, z=-0.64),
+    #                 width=500, height=500,
+    #                 margin=dict(l=65, r=50, b=65, t=90)
+    # )
+
+    # fig.show()
+
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(t.flatten(), x.flatten(), u, cmap='viridis')
+    plt.show()
 
 
 def plot_burgers_model(model, save_path = None):
