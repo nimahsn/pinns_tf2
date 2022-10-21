@@ -4,9 +4,10 @@ import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.mplot3d import Axes3D
 import tensorflow as tf
+import plotly.graph_objects as go
 
 
-def simulate_burgers(n_samples, boundary_samples = None, random_seed = 42, dtype=tf.float32):
+def simulate_burgers(n_samples, boundary_samples = None, random_seed = 42, dtype=tf.float32) -> tuple[tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor]]:
     """
     Simulate the burgers equation
 
@@ -48,7 +49,7 @@ def simulate_burgers(n_samples, boundary_samples = None, random_seed = 42, dtype
     return (tx_samples, y_samples), (tx_init, y_init), (tx_boundary, y_boundary)
 
 
-def simulate_wave(n_samples, dimension, phi_function, psi_function, boundary_function_start, boundary_function_end, length = 1, time = 1, random_seed = 42, dtype=tf.float32):
+def simulate_wave(n_samples, dimension, phi_function, psi_function, boundary_function_start, boundary_function_end, x_start = 0, length = 1, time = 1, random_seed = 42, dtype=tf.float32) -> tuple[tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor]]:
     """
     Simulate the wave equation in 1D or 2D with a given initial condition and Dirichlet boundary conditions.
     Args:
@@ -58,25 +59,29 @@ def simulate_wave(n_samples, dimension, phi_function, psi_function, boundary_fun
         psi_function (function): Function that returns the initial condition of the wave equation on u_t.
         boundary_function_start (function): Function that returns the boundary condition of the wave equation on u at the start of the domain.
         boundary_function_end (function): Function that returns the boundary condition of the wave equation on u at the end of the domain.
+        x_start (float, optional): Start of the domain. Defaults to 0.
         length (float, optional): Length of the domain. Defaults to 1.
         time (float, optional): Time frame of the simulation. Defaults to 1.
         random_seed (int, optional): Random seed for reproducibility. Defaults to 42.
         dtype (tf.dtype, optional): Data type of the samples. Defaults to tf.float32.
+
+    Returns:
+        tuple[tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor]]: Samples of the wave equation. Returns a tuple of tensors (equation_samples, initial_samples, boundary_samples).
     
     """
     
     r = np.random.RandomState(random_seed)
     t = r.uniform(0, time, (n_samples, 1))
-    x = r.uniform(0, length, (n_samples, dimension))
+    x = r.uniform(x_start, x_start + length, (n_samples, dimension))
     tx_eqn = np.concatenate((t, x), axis = 1)
 
     t_init = np.zeros((n_samples, 1))
-    x_init = r.uniform(0, length, (n_samples, dimension))
+    x_init = r.uniform(x_start, x_start + length, (n_samples, dimension))
     tx_init = np.concatenate((t_init, x_init), axis = 1)
 
     t_boundary = r.uniform(0, time, (n_samples, 1))
-    x_boundary = np.ones((n_samples//2, 1))*length
-    x_boundary = np.append(x_boundary, np.zeros((n_samples - n_samples//2, 1)), axis=0)
+    x_boundary = np.ones((n_samples//2, 1))*(x_start + length)
+    x_boundary = np.append(x_boundary, np.ones((n_samples - n_samples//2, 1)) * x_start, axis=0)
     tx_boundary = np.concatenate((t_boundary, x_boundary), axis = 1)
 
     tx_eqn = tf.convert_to_tensor(tx_eqn, dtype = dtype)
@@ -97,48 +102,75 @@ def simulate_wave(n_samples, dimension, phi_function, psi_function, boundary_fun
     return (tx_eqn, y_eqn), (tx_init, y_phi, y_psi), (tx_boundary, y_boundary)
     
 
-def plot_wave_model(model, length, time, save_path = None):
+def plot_wave_model(model, x_start, length, time, interactive = False, save_path = None) -> None:
     """
-    todo
+    Plot the solution of the wave equation for a given model.
+    Args:
+        model (tf.keras.Model): Model that predicts the solution of the wave equation.
+        x_start (float): Start of the domain.
+        length (float): Length of the domain.
+        time (float): Time frame of the simulation.
+        interactive (bool, optional): If True, the plot is interactive. Defaults to False.
+        save_path (str, optional): Path to save the plot. Defaults to None.
     """
-    
-    def phi(tx, c=1, k=2, sd=0.5):
-        t = tx[..., 0, None]
-        x = tx[..., 1, None]
-        z = k*x - (c*k)*t
-        return tf.sin(z) * tf.exp(-(0.5*z/sd)**2)
-    # du0/dt
-    def psi(tx):
-        with tf.GradientTape() as g:
-            g.watch(tx)
-            u = phi(tx)
-        du_dt = g.batch_jacobian(u, tx)[..., 0]
-        return du_dt
 
-    t, x = np.meshgrid(np.linspace(0, time, 100), np.linspace(0, length, 100))
+    t, x = np.meshgrid(np.linspace(0, time, 100), np.linspace(x_start, x_start + length, 100))  
     tx = np.stack([t.flatten(), x.flatten()], axis=-1)
     u = model.predict(tx, batch_size=1000)
-    print(u.shape)
-    # u = u.reshape(t.shape)
 
-    # fig = go.Figure(data=[go.Surface(x = t, y = x, z=u.reshape(t.shape))])
-    # fig.update_traces(contours_z=dict(show=True, usecolormap=True,
-    #                                 highlightcolor="limegreen", project_z=True))
-    # fig.update_layout(title='Mt Bruno Elevation', autosize=False,
-    #                 scene_camera_eye=dict(x=1.87, y=0.88, z=-0.64),
-    #                 width=500, height=500,
-    #                 margin=dict(l=65, r=50, b=65, t=90)
-    # )
+    if interactive:
+        fig = go.Figure(data=[go.Surface(x = t, y = x, z=u.reshape(t.shape))])
+        fig.update_traces(contours_z=dict(show=True, usecolormap=True,
+                                        highlightcolor="limegreen", project_z=True))
+        fig.update_layout(title='Mave PINN', autosize=True, scene=dict(
+                            xaxis_title='t',
+                            yaxis_title='x',
+                            zaxis_title='y',
+                        ),
+                        scene_camera_eye=dict(x=1.87, y=0.88, z=-0.64),
+                        width=500, height=500,
+                        margin=dict(l=65, r=50, b=65, t=90)
+        )
+        fig.show()
 
-    # fig.show()
+    else:
+        fig = plt.figure(figsize=(30, 90))
+        ax = fig.add_subplot(311, projection='3d')
+        surf = ax.scatter(t, x, np.reshape(u, t.shape), cmap='viridis', alpha=0.6)
+        ax.set_xlabel('t')
+        ax.set_ylabel('x')
+        ax.set_zlabel('u')
+        ax.azim = 5
+        ax.elev = 20
+        # fig.colorbar(surf)
 
-    fig = plt.figure(figsize=(10, 10))
-    ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(t.flatten(), x.flatten(), u, cmap='viridis')
-    plt.show()
+
+        ax = fig.add_subplot(312, projection='3d')
+        surf = ax.scatter(t, x, np.reshape(u, t.shape), cmap='viridis', alpha=0.6)
+        ax.set_xlabel('t')
+        ax.set_ylabel('x')
+        ax.set_zlabel('u')
+        ax.azim = 45
+        ax.elev = 20
+        # fig.colorbar(surf)
 
 
-def plot_burgers_model(model, save_path = None):
+        ax = fig.add_subplot(313, projection='3d')
+        surf = ax.scatter(t, x, np.reshape(u, t.shape), cmap='viridis', alpha=0.6)
+        ax.azim = 85
+        ax.elev = 20
+        ax.set_xlabel('t')
+        ax.set_ylabel('x')
+        ax.set_zlabel('u')
+        # fig.colorbar(surf)
+
+
+        if save_path:
+            plt.savefig(save_path)
+        plt.show()
+
+
+def plot_burgers_model(model, save_path = None) -> None:
     """
     Plot the model predictions for the Burgers equation.
 

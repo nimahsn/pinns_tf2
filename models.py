@@ -128,10 +128,16 @@ class WavePinn(keras.Model):
     self.c = c
 
   @tf.function
-  def input_gradient(self, x):
+  def input_diagonal_hessian(self, x):
     """
     computes the diagonal of the Hessian of the network output with respect to the inputs.
+    Args:
+      x: input tensor of shape (n_inputs, 2)
+    Returns:
+      u_tt: second derivative of u with respect to t
+      u_xx: second derivative of u with respect to x
     """
+    
     with tf.GradientTape() as g2tape:
       g2tape.watch(x)
       with tf.GradientTape() as gtape:
@@ -144,37 +150,24 @@ class WavePinn(keras.Model):
     u_xx = hessian[..., 1, 1]
     return u_tt, u_xx
 
-
-  # @tf.function
-  # def input_gradient(self, x):
-  #   with tf.GradientTape(persistent=True) as g1:
-  #     # Turn x into a list of n tensors of shape (k,)
-  #     x_unstacked = tf.unstack(x, axis=1)
-  #     g1.watch(x_unstacked)
-
-  #     with tf.GradientTape() as g2:
-  #       # Re-stack x before passing it into f
-  #       x_stacked = tf.stack(x_unstacked, axis=1) # shape = (k,n)
-  #       g2.watch(x_stacked)
-  #       f_x = self.network(x_stacked) # shape = (k,)
-      
-  #     # Calculate gradient of f with respect to x
-  #     df_dx = g2.gradient(f_x, x_stacked) # shape = (k,n)
-  #     # Turn df/dx into a list of n tensors of shape (k,)
-  #     df_dx_unstacked = tf.unstack(df_dx, axis=1)
-
-  #   # Calculate 2nd derivatives
-  #   d2f_dx2 = []
-  #   for df_dxi,xi in zip(df_dx_unstacked, x_unstacked):
-  #     # Take 2nd derivative of each dimension separately:
-  #     #   d/dx_i (df/dx_i)
-  #     d2f_dx2.append(g1.gradient(df_dxi, xi))
-    
-  #   # Stack 2nd derivates
-  #   d2f_dx2_stacked = tf.stack(d2f_dx2, axis=1) # shape = (k,n)
-    
-  #   return d2f_dx2_stacked
   
+  @tf.function
+  def input_gradient(self, x):
+    """
+    Compute the first derivative of the network output with respect to the inputs.
+    Args:
+      x: input tensor of shape (n_inputs, 2)
+    Returns:
+      u: network output of shape (n_inputs, 1)
+      u_t: first derivative of u with respect to t
+    """
+
+    with tf.GradientTape() as g:
+      g.watch(x)
+      u = self.network(x)
+    du_dt = g.batch_jacobian(u, x)[..., 0]
+    return u, du_dt
+
   
   def call(self, inputs):
     """
@@ -203,14 +196,11 @@ class WavePinn(keras.Model):
     # Calculate PDE residual
     pde_residual = d2u_dt2 - (self.c**2) * d2u_dx2
 
-    with tf.GradientTape() as g:
-      g.watch(tx_init)
-      u_phi = self.network(tx_init)
-    du_dt_psi = g.gradient(u_phi, tx_init)[..., 0, None]
+    u_phi, du_dt_psi = self.input_gradient(tx_init)
 
     u_bound = self.network(tx_bound)
 
-    return pde_residual, u_phi, du_dt_psi, u_bound
+    return tf.stack([pde_residual, u_phi, du_dt_psi, u_bound], axis=0)
 
   
   def fit(self, inputs, labels, epochs, optimizer, progress_interval=500):
