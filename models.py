@@ -115,7 +115,7 @@ class BurgersPinn(keras.Model):
     return keras.Model(inputs=[inputs], outputs = [outputs])
 
 
-# WIP
+# Review the model and related utils function: Not sure about boundary and initial conditions
 class WavePinn(keras.Model):
   """
   PINN model for the wave equation with Dirichlet boundary conditions.
@@ -137,7 +137,7 @@ class WavePinn(keras.Model):
       u_tt: second derivative of u with respect to t
       u_xx: second derivative of u with respect to x
     """
-    
+
     with tf.GradientTape() as g2tape:
       g2tape.watch(x)
       with tf.GradientTape() as gtape:
@@ -254,3 +254,134 @@ class WavePinn(keras.Model):
     outputs = keras.layers.Dense(n_outputs, kernel_initializer=initialization)(x)
     return keras.Model(inputs=[inputs], outputs = [outputs])
 
+
+class HeatPinn(keras.Model):
+  """
+  Keras PINN model for the Heat PDE.
+  Attributes:
+    network (keras.Model): The neural network used to approximate the solution.
+    k (float): The thermal conductivity of the material.
+  """
+
+  def __init__(self, network: "keras.Model", k: float = 1.0) -> None:
+    """
+    Args:
+      network: A keras model representing the backbone neural network.
+      k: thermal conductivity. Default is 1.
+    """
+    super().__init__()
+    self.network = network
+    self.k = k
+
+
+  def fit(self, inputs, labels, epochs, optimizer, progress_interval=500):
+    """
+    Train the model with the given inputs and optimizer.
+
+    Args:
+      inputs: A list of tensors, where the first tensor is the equation data,
+        the second tensor is the initial condition data, and the fourth tensor is the
+        boundary condition data.
+      labels: A list of tensors, where the first tensor is the phi initial condition labels,
+        the second tensor is the boundary condition labels.
+      epochs: The number of epochs to train for.
+      optimizer : The optimizer to use for training.
+      progress_interval: The number of epochs between each progress report.
+    """
+    start_time = time.time()
+    for epoch in range(epochs):
+      with tf.GradientTape() as tape:
+        residual, u_init, u_bndry = self.call(inputs)
+
+        loss = tf.reduce_mean(tf.square(residual)) + tf.reduce_mean(tf.square(u_init - labels[0])) + tf.reduce_mean(tf.square(u_bndry - labels[1]))
+
+      grads = tape.gradient(loss, self.trainable_weights)
+      optimizer.apply_gradients(zip(grads, self.trainable_weights))
+      
+      if epoch % progress_interval == 0:
+        print(f"Epoch: {epoch} Loss: {loss.numpy():.4f} Total Elapsed Time: {time.time() - start_time:.2f}")
+
+  
+  @tf.function
+  def input_gradient(self, tx):
+    """
+    Compute the first order derivative w.r.t. time and second order derivative w.r.t. space of the network output.
+
+    Args:
+      tx: input tensor of shape (n_inputs, 2)
+
+    Returns:
+      u_t: first derivative of u with respect to t
+      u_xx: second derivative of u with respect to x
+    """
+    with tf.GradientTape() as gg:
+      gg.watch(tx)
+      with tf.GradientTape() as g:
+        g.watch(tx)
+        u = self.network(tx)
+
+      first_order = g.batch_jacobian(u, tx)
+      du_dt = first_order[..., 0]
+      du_dx = first_order[..., 1]
+
+    d2u_dx2 = gg.batch_jacobian(du_dx, tx)[..., 1]
+
+    return du_dt, d2u_dx2
+    
+
+  
+  def call(self, inputs):
+    """
+    Performs forward pass of the model, computing the PDE residual and the initial and boundary conditions.
+
+    Args:
+      inputs: A list of tensors, where the first tensor is the equation data,
+        the second tensor is the initial condition data, and the third tensor is the
+        boundary condition data.
+
+    Returns:
+        pde_residual: The PDE residual of shape (n_inputs, 1)
+        u_init: The initial condition output of shape (n_inputs, 1)
+        u_bndry: The boundary condition output of shape (n_inputs, 1)
+
+    """
+
+    tx_equation = inputs[0]
+    tx_init = inputs[1]
+    tx_bound = inputs[2]
+
+    du_dt, d2u_dx2 = self.input_gradient(tx_equation)
+
+    
+    # Calculate PDE residual
+    pde_residual = du_dt - (self.k) * d2u_dx2
+
+    n_i = tf.shape(tx_init)[0]
+    tx_ib = tf.concat([tx_init, tx_bound], axis=0)
+    u_ib = self.network(tx_ib)
+    u_init = u_ib[:n_i]
+    u_bndry = u_ib[n_i:]
+
+    return pde_residual, u_init, u_bndry
+
+  @staticmethod
+  def build_network(layers, n_inputs=2, n_outputs=1, activation=keras.activations.tanh, initialization=keras.initializers.glorot_normal):
+    """
+    Builds a fully connected neural network with the specified number of layers and nodes per layer.
+
+    Args:
+        layers (list): List of integers specifying the number of nodes in each layer.
+        n_inputs (int): Number of inputs to the network.
+        n_outputs (int): Number of outputs from the network.
+        activation (function): Activation function to use in each layer.
+        initialization (function): Initialization function to use in each layer.
+    returns:
+        keras.Model: A keras model representing the neural network.
+    """
+    inputs = keras.layers.Input((n_inputs))
+    x = inputs
+    for i in layers:
+      x = keras.layers.Dense(i, activation = activation, kernel_initializer=initialization)(x)
+    
+    outputs = keras.layers.Dense(n_outputs, kernel_initializer=initialization)(x)
+    return keras.Model(inputs=[inputs], outputs = [outputs])
