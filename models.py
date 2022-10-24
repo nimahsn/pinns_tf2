@@ -385,3 +385,105 @@ class HeatPinn(keras.Model):
     
     outputs = keras.layers.Dense(n_outputs, kernel_initializer=initialization)(x)
     return keras.Model(inputs=[inputs], outputs = [outputs])
+
+
+class SchroedingerPinn(keras.Model):
+  """
+  Keras PINN model for the Schroedinger PDE.
+  Attributes:
+    network (keras.Model): The neural network used to approximate the solution.
+    k (float): The planck constant. Default is 0.5.
+  """
+
+  def __init__(self, network: "keras.Model", k: float = 0.5) -> None:
+    super().__init__()
+    self.network = network
+    self.k = k
+
+
+  def fit(self, inputs, labels, epochs, optimizer, progress_interval=500):
+    start_time = time.time()
+    for epoch in range(epochs):
+      with tf.GradientTape() as tape:
+        residual, h_init, h_bndry, dhb_dx = self.call(inputs)
+
+        loss = tf.reduce_mean(tf.abs(residual)) + tf.reduce_mean # TODO: Add loss for initial and boundary conditions
+
+      grads = tape.gradient(loss, self.trainable_weights)
+      optimizer.apply_gradients(zip(grads, self.trainable_weights))
+      
+      if epoch % progress_interval == 0:
+        print(f"Epoch: {epoch} Loss: {loss.numpy():.4f} Total Elapsed Time: {time.time() - start_time:.2f}")
+
+
+  @tf.function
+  def input_gradient_equation(self, tx):
+    with tf.GradientTape() as gg:
+      gg.watch(tx)
+      
+      with tf.GradientTape() as g:
+        g.watch(tx)
+        h = self.network(tx) # first column is real part, second column is imaginary part
+      
+      first_order = g.batch_jacobian(h, tx)
+      dh_dt = first_order[:, :, 0]
+      dh_dx = first_order[:, :, 1]
+
+
+    d2h_dx2 = gg.batch_jacobian(dh_dx, tx)[:, :, 1]
+
+    return h, dh_dt, d2h_dx2
+
+
+  @tf.function
+  def input_gradient_boundary(self, tx):
+    with tf.GradientTape() as g:
+      g.watch(tx)
+      h = self.network(tx)
+    
+    dh_dx = g.batch_jacobian(h, tx)[:, :, 1]
+
+    return h, dh_dx
+
+
+  def call(self, inputs):
+    tx_equation = inputs[0]
+    tx_init = inputs[1]
+    tx_bound = inputs[2]
+
+    h, dh_dt, d2h_dx2 = self.input_gradient_equation(tx_equation)
+
+    # Calculate PDE residual
+    h = tf.complex(h[:, 0:1], h[:, 1:2])
+    dh_dt = tf.complex(dh_dt[:, 0:1], dh_dt[:, 1:2])
+    d2h_dx2 = tf.complex(d2h_dx2[:, 0:1], d2h_dx2[:, 1:2])
+    pde_residual = 1j * dh_dt + self.k * d2h_dx2 + (h * tf.math.conj(h)) * h
+
+    h_init = self.network(tx_init)
+
+    h_bound, dhb_dx = self.input_gradient_boundary(tx_bound)
+
+    return pde_residual, h_init, h_bound, dhb_dx
+
+  
+  @staticmethod
+  def build_network(layers, n_inputs=2, n_outputs=2, activation=keras.activations.tanh, initialization=keras.initializers.glorot_normal):
+    """
+    Builds a fully connected neural network with the specified number of layers and nodes per layer. The network outputs the real and imaginary parts of the solution.
+
+    Args:
+        layers (list): List of integers specifying the number of nodes in each layer.
+        n_inputs (int): Number of inputs to the network. Default is 2.
+        n_outputs (int): Number of outputs from the network. Default is 2.
+        activation (function): Activation function to use in each layer.
+        initialization (function): Initialization function to use in each layer.
+    returns:
+        keras.Model: A keras model representing the neural network.
+    """
+    inputs = keras.layers.Input((n_inputs))
+    x = inputs
+    for i in layers:
+      x = keras.layers.Dense(i, activation = activation, kernel_initializer=initialization)(x)
+    
+    outputs = keras.layers.Dense(n_outputs, kernel_initializer=initialization)(x)
+    return keras.Model(inputs=[inputs], outputs = [outputs])
