@@ -1,7 +1,26 @@
+from typing import Dict
 from tensorflow import keras
 import tensorflow as tf
 import numpy as np
 import time
+
+LOSS_RESIDUAL = "loss_residual"
+LOSS_INITIAL = "loss_initial"
+LOSS_BOUNDARY = "loss_boundary"
+
+
+def _create_history_dict():
+    return {
+        LOSS_RESIDUAL: [],
+        LOSS_INITIAL: [],
+        LOSS_BOUNDARY: [],
+    }
+
+
+def _add_to_history_dict(history_dict, loss_residual, loss_initial, loss_boundary):
+    history_dict[LOSS_RESIDUAL].append(loss_residual)
+    history_dict[LOSS_INITIAL].append(loss_initial)
+    history_dict[LOSS_BOUNDARY].append(loss_boundary)
 
 
 class BurgersPinn(keras.Model):
@@ -10,7 +29,7 @@ class BurgersPinn(keras.Model):
     self.network = network
     self.nu = nu
 
-  def fit(self, inputs, labels, epochs, optimizer, progress_interval=500):
+  def fit(self, inputs, labels, epochs, optimizer, progress_interval=500) -> dict[str, list[float]]:
     """
     Train the model with the given inputs and optimizer.
 
@@ -21,17 +40,26 @@ class BurgersPinn(keras.Model):
       epochs: The number of epochs to train for.
       optimizer : The optimizer to use for training.
       progress_interval: The number of epochs between each progress report.
+
+    Returns:
+        A dictionary containing the loss history for each loss function.
     """
+    history_dict = _create_history_dict()
     start_time = time.time()
+
     for epoch in range(epochs):
       with tf.GradientTape() as tape:
         burgers_eq, u_init, u_bndry = self.call(inputs)
-        loss = tf.reduce_mean(burgers_eq**2) + tf.reduce_mean(tf.square(u_init - labels[1])) + tf.reduce_mean(tf.square(u_bndry - labels[2]))
-
+        loss_residual = tf.reduce_mean(burgers_eq**2) 
+        loss_init = tf.reduce_mean(tf.square(u_init - labels[1]))
+        loss_boundary = tf.reduce_mean(tf.square(u_bndry - labels[2]))
+        loss = loss_residual + loss_init + loss_boundary
       grads = tape.gradient(loss, self.trainable_weights)
       optimizer.apply_gradients(zip(grads, self.trainable_weights))
+      _add_to_history_dict(history_dict, loss_residual, loss_init, loss_boundary)
       if epoch % progress_interval == 0:
         print(f"Epoch: {epoch} Loss: {loss.numpy():.4f} Total Elapsed Time: {time.time() - start_time:.2f}")
+    return history_dict
 
   
   @tf.function
@@ -203,7 +231,7 @@ class WavePinn(keras.Model):
     return tf.stack([pde_residual, u_phi, du_dt_psi, u_bound], axis=0)
 
   
-  def fit(self, inputs, labels, epochs, optimizer, progress_interval=500):
+  def fit(self, inputs, labels, epochs, optimizer, progress_interval=500) -> dict[str, list[float]]:
     """
     Train the model with the given inputs and optimizer.
 
@@ -217,22 +245,32 @@ class WavePinn(keras.Model):
       epochs: The number of epochs to train for.
       optimizer : The optimizer to use for training.
       progress_interval: The number of epochs between each progress report.
+    Returns:
+      A dictionary containing the loss history for each of the three loss terms.
     """
+    history = _create_history_dict()
     start_time = time.time()
     for epoch in range(epochs):
       with tf.GradientTape() as tape:
         residual, u_phi, du_dt_psi, u_bndry = self.call(inputs)
 
-        loss = tf.reduce_mean(tf.square(residual)) + tf.reduce_mean(tf.square(u_phi - labels[0])) + tf.reduce_mean(tf.square(du_dt_psi - labels[1])) + tf.reduce_mean(tf.square(u_bndry - labels[2]))
+        loss_equation = tf.reduce_mean(tf.square(residual))
+        loss_initial = tf.reduce_mean(tf.square(u_phi - labels[0])) + tf.reduce_mean(tf.square(du_dt_psi - labels[1]))
+        loss_boundary = tf.reduce_mean(tf.square(u_bndry - labels[2]))
+        loss = loss_equation + loss_initial + loss_boundary
 
       grads = tape.gradient(loss, self.trainable_weights)
       optimizer.apply_gradients(zip(grads, self.trainable_weights))
+
+      _add_to_history_dict(history, loss, loss_equation, loss_initial, loss_boundary)
       
       if epoch % progress_interval == 0:
         print(f"Epoch: {epoch} Loss: {loss.numpy():.4f} Total Elapsed Time: {time.time() - start_time:.2f}")
 
+    return history
+
   
-  @staticmethod
+  @staticmethod 
   def build_network(layers, n_inputs=2, n_outputs=1, activation=keras.activations.tanh, initialization=keras.initializers.glorot_normal):
     """
     Builds a fully connected neural network with the specified number of layers and nodes per layer.
@@ -274,7 +312,7 @@ class HeatPinn(keras.Model):
     self.k = k
 
 
-  def fit(self, inputs, labels, epochs, optimizer, progress_interval=500):
+  def fit(self, inputs, labels, epochs, optimizer, progress_interval=500) -> dict[str, list[float]]:
     """
     Train the model with the given inputs and optimizer.
 
@@ -287,19 +325,30 @@ class HeatPinn(keras.Model):
       epochs: The number of epochs to train for.
       optimizer : The optimizer to use for training.
       progress_interval: The number of epochs between each progress report.
+    Returns:
+      A dictionary containing the loss history for each of the three loss terms.
     """
+    history = _create_history_dict()
+
     start_time = time.time()
     for epoch in range(epochs):
       with tf.GradientTape() as tape:
         residual, u_init, u_bndry = self.call(inputs)
 
-        loss = tf.reduce_mean(tf.square(residual)) + tf.reduce_mean(tf.square(u_init - labels[0])) + tf.reduce_mean(tf.square(u_bndry - labels[1]))
+        loss_residual = tf.reduce_mean(tf.square(residual))
+        loss_init = tf.reduce_mean(tf.square(u_init - labels[0]))
+        loss_boundary = tf.reduce_mean(tf.square(u_bndry - labels[1]))
+        loss = loss_residual + loss_init + loss_boundary
 
       grads = tape.gradient(loss, self.trainable_weights)
       optimizer.apply_gradients(zip(grads, self.trainable_weights))
+
+      _add_to_history_dict(history, loss, loss_residual, loss_init, loss_boundary)
       
       if epoch % progress_interval == 0:
         print(f"Epoch: {epoch} Loss: {loss.numpy():.4f} Total Elapsed Time: {time.time() - start_time:.2f}")
+    
+    return history
 
   
   @tf.function
@@ -401,7 +450,7 @@ class SchroedingerPinn(keras.Model):
     self.k = k
 
 
-  def fit(self, inputs, labels, epochs, optimizer, n_boundary_samples, progress_interval=500):
+  def fit(self, inputs, labels, epochs, optimizer, n_boundary_samples, progress_interval=500) -> dict[str, list[float]]:
     """
     Train the model with the given inputs and optimizer.
     Args:
@@ -411,21 +460,31 @@ class SchroedingerPinn(keras.Model):
       optimizer : The optimizer to use for training.
       n_boundary_samples: The number of boundary samples to use for training.
       progress_interval: The number of epochs between each progress report.
+    Returns:
+      A dictionary containing the loss history for each of the three loss terms.
     """
 
+    history = _create_history_dict()
 
     start_time = time.time()
     for epoch in range(epochs):
       with tf.GradientTape() as tape:
         residual, h_init, h_bndry, dhb_dx = self.call(inputs)
 
-        loss = tf.reduce_mean(tf.abs(residual)) + tf.reduce_mean(tf.reduce_sum(tf.square(h_init - labels[0]), axis=1)) + tf.reduce_mean(tf.reduce_sum(tf.square(h_bndry[:n_boundary_samples//2] - h_bndry[n_boundary_samples//2:]), axis=1)) + tf.reduce_mean(tf.reduce_sum(tf.square(dhb_dx[:n_boundary_samples//2] - dhb_dx[n_boundary_samples//2:]), axis=1))
+        loss_residual = tf.reduce_mean(tf.abs(residual))
+        loss_init = tf.reduce_mean(tf.reduce_sum(tf.square(h_init - labels[0]), axis=1))
+        loss_boundary = tf.reduce_mean(tf.reduce_sum(tf.square(h_bndry[:n_boundary_samples//2] - h_bndry[n_boundary_samples//2:]), axis=1)) + tf.reduce_mean(tf.reduce_sum(tf.square(dhb_dx[:n_boundary_samples//2] - dhb_dx[n_boundary_samples//2:]), axis=1))
+        loss = loss_residual + loss_init + loss_boundary
 
       grads = tape.gradient(loss, self.trainable_weights)
       optimizer.apply_gradients(zip(grads, self.trainable_weights))
+
+      _add_to_history_dict(history, loss_residual, loss_init, loss_boundary)
       
       if epoch % progress_interval == 0:
         print(f"Epoch: {epoch} Loss: {loss.numpy():.4f} Total Elapsed Time: {time.time() - start_time:.2f}")
+      
+    return history
 
 
   @tf.function
