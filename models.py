@@ -401,13 +401,25 @@ class SchroedingerPinn(keras.Model):
     self.k = k
 
 
-  def fit(self, inputs, labels, epochs, optimizer, progress_interval=500):
+  def fit(self, inputs, labels, epochs, optimizer, n_boundary_samples, progress_interval=500):
+    """
+    Train the model with the given inputs and optimizer.
+    Args:
+      inputs: A list of tensors, where the first tensor is the equation data, the second tensor is the initial condition data, and the third tensor is the boundary condition data.
+      labels: A list of tensors, where the first tensor is the initial condition labels, the second tensor is the initial condition labels, and the third tensor is the boundary condition labels.
+      epochs: The number of epochs to train for.
+      optimizer : The optimizer to use for training.
+      n_boundary_samples: The number of boundary samples to use for training.
+      progress_interval: The number of epochs between each progress report.
+    """
+
+
     start_time = time.time()
     for epoch in range(epochs):
       with tf.GradientTape() as tape:
         residual, h_init, h_bndry, dhb_dx = self.call(inputs)
 
-        loss = tf.reduce_mean(tf.abs(residual)) + tf.reduce_mean # TODO: Add loss for initial and boundary conditions
+        loss = tf.reduce_mean(tf.abs(residual)) + tf.reduce_mean(tf.sum(tf.square(h_init - labels[0]), axis=1)) + tf.reduce_mean(tf.sum(tf.square(h_bndry - labels[1]), axis=1)) + tf.reduce_mean(tf.sum(tf.square(dhb_dx[:n_boundary_samples//2] - dhb_dx[n_boundary_samples//2:]), axis=1))
 
       grads = tape.gradient(loss, self.trainable_weights)
       optimizer.apply_gradients(zip(grads, self.trainable_weights))
@@ -418,6 +430,16 @@ class SchroedingerPinn(keras.Model):
 
   @tf.function
   def input_gradient_equation(self, tx):
+    """
+    Compute the first order derivative w.r.t. time and second order derivative w.r.t. space of the network output.
+    Args:
+      tx: input tensor of shape (n_inputs, 2)
+    Returns:
+      h: network output of shape (n_inputs, 2)
+      dh_dt: first derivative of h with respect to t of shape (n_inputs, 2). The first column is the real part derivative and the second column is the imaginary part derivative.
+      d2h_dx2: second derivative of h with respect to x of shape (n_inputs, 2). The first column is the real part derivative and the second column is the imaginary part derivative.
+    """
+
     with tf.GradientTape() as gg:
       gg.watch(tx)
       
@@ -437,6 +459,16 @@ class SchroedingerPinn(keras.Model):
 
   @tf.function
   def input_gradient_boundary(self, tx):
+    """
+    Compute the first order derivative w.r.t. space of the network output.
+    Args:
+      tx: input tensor of shape (n_inputs, 2)
+    Returns:
+      h: network output of shape (n_inputs, 2)
+      dh_dx: first derivative of h with respect to x of shape (n_inputs, 2). The first column is the real part derivative and the second column is the imaginary part derivative.
+
+    """
+
     with tf.GradientTape() as g:
       g.watch(tx)
       h = self.network(tx)
