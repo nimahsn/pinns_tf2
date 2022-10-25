@@ -419,7 +419,7 @@ class SchroedingerPinn(keras.Model):
       with tf.GradientTape() as tape:
         residual, h_init, h_bndry, dhb_dx = self.call(inputs)
 
-        loss = tf.reduce_mean(tf.abs(residual)) + tf.reduce_mean(tf.sum(tf.square(h_init - labels[0]), axis=1)) + tf.reduce_mean(tf.sum(tf.square(h_bndry - labels[1]), axis=1)) + tf.reduce_mean(tf.sum(tf.square(dhb_dx[:n_boundary_samples//2] - dhb_dx[n_boundary_samples//2:]), axis=1))
+        loss = tf.reduce_mean(tf.abs(residual)) + tf.reduce_mean(tf.reduce_sum(tf.square(h_init - labels[0]), axis=1)) + tf.reduce_mean(tf.reduce_sum(tf.square(h_bndry[:n_boundary_samples//2] - h_bndry[n_boundary_samples//2:]), axis=1)) + tf.reduce_mean(tf.reduce_sum(tf.square(dhb_dx[:n_boundary_samples//2] - dhb_dx[n_boundary_samples//2:]), axis=1))
 
       grads = tape.gradient(loss, self.trainable_weights)
       optimizer.apply_gradients(zip(grads, self.trainable_weights))

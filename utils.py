@@ -146,6 +146,35 @@ def simulate_heat(n_samples, phi_function, boundary_function, length, time, rand
 
     return (tx_eqn, y_eqn), (tx_init, y_phi), (tx_boundary, y_boundary)
 
+
+def simulate_schrodinger(n_samples, init_function, x_start, length, time, random_seed = 42, dtype = tf.float32):
+
+    r = np.random.RandomState(random_seed)
+    
+    t = r.uniform(0, time, (n_samples, 1))
+    x = r.uniform(x_start, x_start + length, (n_samples, 1))
+    tx_eqn = np.concatenate((t, x), axis = 1)
+
+    t_init = np.zeros((n_samples, 1))
+    x_init = r.uniform(x_start, x_start + length, (n_samples, 1))
+    tx_init = np.concatenate((t_init, x_init), axis = 1)
+
+    t_boundary = r.uniform(0, time, (n_samples, 1))
+    x_boundary = np.ones((n_samples//2, 1))*x_start
+    x_boundary = np.append(x_boundary, np.ones((n_samples - n_samples//2, 1)) * (x_start + length), axis=0)
+    tx_boundary = np.concatenate((t_boundary, x_boundary), axis = 1)
+
+    tx_eqn = tf.convert_to_tensor(tx_eqn, dtype = dtype)
+    tx_init = tf.convert_to_tensor(tx_init, dtype = dtype)
+    tx_boundary = tf.convert_to_tensor(tx_boundary, dtype = dtype)
+
+    y_eqn = tf.zeros((n_samples, 2), dtype = dtype)
+    y_init = init_function(tx_init)
+
+    return (tx_eqn, y_eqn), (tx_init, y_init), tx_boundary
+
+
+
 def plot_wave_model(model, x_start, length, time, interactive = False, save_path = None) -> None:
     """
     Plot the solution of the wave equation for a given model.
@@ -294,6 +323,50 @@ def plot_heat_model(model, length, time, save_path = None) -> None:
         plt.title('t={}'.format(t_cs))
         plt.xlabel('x')
         plt.ylabel('u(t,x)')
+    plt.tight_layout()
+    if save_path is not None:
+        plt.savefig(save_path)
+    plt.show()
+
+
+def plot_schrodinger_model(model, x_start, length, time, save_path = None) -> None:
+    """
+    Plot the model predictions for the Schrodinger equation.
+    Args:
+        model: A trained SchrodingerPinn model.
+        length: The length of the domain.
+        save_path: The path to save the plot to.
+    """
+    num_test_samples = 1000
+    t_flat = np.linspace(0, time, num_test_samples)
+    x_flat = np.linspace(x_start, x_start + length, num_test_samples)
+    t, x = np.meshgrid(t_flat, x_flat)
+    tx = np.stack([t.flatten(), x.flatten()], axis=-1)
+    h = model.predict(tx, batch_size=num_test_samples)
+    u = tf.abs(tf.complex(h[:,0:1], h[:,1:2]))
+    u = tf.reshape(u, t.shape)
+
+    # plot u(t,x) distribution as a color-map
+    fig = plt.figure(figsize=(7,4))
+    gs = GridSpec(2, 5)
+    plt.subplot(gs[0, :])
+    plt.pcolormesh(t, x, u)
+    plt.xlabel('t')
+    plt.ylabel('x')
+    cbar = plt.colorbar(pad=0.05, aspect=10)
+    cbar.set_label('|h(t,x)|')
+    cbar.mappable.set_clim(-1, 1)
+    # plot u(t=const, x) cross-sections
+    t_cross_sections = [0, time/4, time/2, 3*time/4, time]
+    for i, t_cs in enumerate(t_cross_sections):
+        plt.subplot(gs[1, i])
+        tx = np.stack([np.full(t_flat.shape, t_cs), x_flat], axis=-1)
+        h = model.predict(tx, batch_size=num_test_samples)
+        u = tf.abs(tf.complex(h[:,0:1], h[:,1:2]))
+        plt.plot(x_flat, u)
+        plt.title('t={}'.format(t_cs))
+        plt.xlabel('x')
+        plt.ylabel('|h(t,x)|')
     plt.tight_layout()
     if save_path is not None:
         plt.savefig(save_path)
