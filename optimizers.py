@@ -1,3 +1,8 @@
+"""
+Module for customized optimizers.
+"""
+
+
 import scipy.optimize 
 import numpy as np
 import tensorflow as tf

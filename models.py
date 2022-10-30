@@ -1,3 +1,8 @@
+"""
+Module including the neural network models for the heat, wave, schrodinger, burgers, and poisson equations.
+"""
+
+
 from typing import Dict
 from tensorflow import keras
 import tensorflow as tf
