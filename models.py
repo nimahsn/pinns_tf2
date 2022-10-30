@@ -18,8 +18,11 @@ def _create_history_dict():
 
 
 def _add_to_history_dict(history_dict, loss_residual, loss_initial, loss_boundary):
+  if loss_residual is not None:
     history_dict[LOSS_RESIDUAL].append(loss_residual)
+  if loss_initial is not None:
     history_dict[LOSS_INITIAL].append(loss_initial)
+  if loss_boundary is not None:
     history_dict[LOSS_BOUNDARY].append(loss_boundary)
 
 
@@ -561,6 +564,85 @@ class SchroedingerPinn(keras.Model):
   def build_network(layers, n_inputs=2, n_outputs=2, activation=keras.activations.tanh, initialization=keras.initializers.glorot_normal):
     """
     Builds a fully connected neural network with the specified number of layers and nodes per layer. The network outputs the real and imaginary parts of the solution.
+
+    Args:
+        layers (list): List of integers specifying the number of nodes in each layer.
+        n_inputs (int): Number of inputs to the network. Default is 2.
+        n_outputs (int): Number of outputs from the network. Default is 2.
+        activation (function): Activation function to use in each layer.
+        initialization (function): Initialization function to use in each layer.
+    returns:
+        keras.Model: A keras model representing the neural network.
+    """
+    inputs = keras.layers.Input((n_inputs))
+    x = inputs
+    for i in layers:
+      x = keras.layers.Dense(i, activation = activation, kernel_initializer=initialization)(x)
+    
+    outputs = keras.layers.Dense(n_outputs, kernel_initializer=initialization)(x)
+    return keras.Model(inputs=[inputs], outputs = [outputs])
+
+
+class PoissonPinn(keras.Model):
+  
+  def __init__(self, network) -> None:
+    super().__init__()
+    self.network = network
+
+
+  def fit(self, inputs, labels, epochs, optimizer, progress_interval=500) -> dict[str, list[float]]:
+
+    history = _create_history_dict()
+    start_time = time.time()
+    for epoch in range(epochs):
+      with tf.GradientTape() as tape:
+        d2u_dx2, u_bndry = self.call(inputs)
+
+        loss_residual = tf.reduce_mean(tf.square(d2u_dx2 - labels[0]))
+        loss_boundary = tf.reduce_mean(tf.square(u_bndry - labels[1]))
+        loss = loss_residual + loss_boundary
+      
+      grads = tape.gradient(loss, self.trainable_weights)
+      optimizer.apply_gradients(zip(grads, self.trainable_weights))
+
+      _add_to_history_dict(history, loss_residual, None, loss_boundary)
+
+      if epoch % progress_interval == 0:
+        print(f"Epoch: {epoch} Loss: {loss.numpy():.4f} Total Elapsed Time: {time.time() - start_time:.2f}")
+
+    return history
+
+  
+  def call(self, inputs):
+    x_equation = inputs[0]
+    x_boundary = inputs[1]
+
+    d2u_dx2 = self.laplace(x_equation)
+    u_boundary = self.network(x_boundary)
+
+    return d2u_dx2, u_boundary
+
+
+  @tf.function
+  def laplace(self, x):
+    with tf.GradientTape() as gg:
+      gg.watch(x)
+      
+      with tf.GradientTape() as g:
+        g.watch(x)
+        u = self.network(x)
+      
+      du_dx = g.batch_jacobian(u, x)[:, 0]
+
+    d2u_dx2 = gg.batch_jacobian(du_dx, x)[:, 0]
+
+    return d2u_dx2
+
+
+  @staticmethod
+  def build_network(layers, n_inputs=1, n_outputs=1, activation=keras.activations.tanh, initialization=keras.initializers.glorot_normal):
+    """
+    Builds a fully connected neural network with the specified number of layers and nodes per layer.
 
     Args:
         layers (list): List of integers specifying the number of nodes in each layer.

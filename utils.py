@@ -5,6 +5,7 @@ from matplotlib.gridspec import GridSpec
 from mpl_toolkits.mplot3d import Axes3D
 import tensorflow as tf
 import plotly.graph_objects as go
+from models import LOSS_RESIDUAL, LOSS_BOUNDARY, LOSS_INITIAL
 
 
 def simulate_burgers(n_samples, boundary_samples = None, random_seed = 42, dtype=tf.float32) -> tuple[tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor]]:
@@ -173,6 +174,34 @@ def simulate_schrodinger(n_samples, init_function, x_start, length, time, random
 
     return (tx_eqn, y_eqn), (tx_init, y_init), tx_boundary
 
+
+def simulate_poisson(n_samples, rhs_function, boundary_function, x_start: float = 0.0, length: float = 1.0, random_seed = 42, dtype = tf.float32) -> tuple[tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor]]:
+    """
+    Simulate the Poisson equation in 1D with a given right hand side and Dirichlet boundary conditions.
+    Args:
+        n_samples (int): number of samples to generate
+        rhs_function (function): Function that returns the right hand side of the Poisson equation.
+        boundary_function (function): Function that returns the boundary condition of the Poisson equation on u.
+        boundary_start (float, optional): Start of the boundary. Defaults to 0.0.
+        length (float, optional): Length of the domain. Defaults to 1.0.
+        random_seed (int, optional): Random seed for reproducibility. Defaults to 42.
+        dtype (tf.dtype, optional): Data type of the samples. Defaults to tf.float32.
+    """
+
+    r = np.random.RandomState(random_seed)
+    
+    x_eqn = r.uniform(x_start, x_start + length, (n_samples, 1))
+
+    x_boundary = np.ones((n_samples//2, 1)) * x_start
+    x_boundary = np.append(x_boundary, np.ones((n_samples - n_samples//2, 1)) * (x_start + length), axis=0)
+
+    x_eqn = tf.convert_to_tensor(x_eqn, dtype = dtype)
+    x_boundary = tf.convert_to_tensor(x_boundary, dtype = dtype)
+
+    rhs_eqn = rhs_function(x_eqn)
+    u_boundary = boundary_function(x_boundary)
+
+    return (x_eqn, rhs_eqn), (x_boundary, u_boundary)
 
 
 def plot_wave_model(model, x_start, length, time, interactive = False, save_path = None) -> None:
@@ -368,6 +397,53 @@ def plot_schrodinger_model(model, x_start, length, time, save_path = None) -> No
         plt.xlabel('x')
         plt.ylabel('|h(t,x)|')
     plt.tight_layout()
+    if save_path is not None:
+        plt.savefig(save_path)
+    plt.show()
+
+
+def plot_poisson_model(model, x_start, length, save_path = None) -> None:
+    """
+    Plot the model predictions for the Poisson equation.
+    Args:
+        model: A trained PoissonPinn model.
+        length: The length of the domain.
+        save_path: The path to save the plot to.
+    """
+    num_test_samples = 1000
+    x = np.linspace(x_start, x_start + length, num_test_samples)[:, np.newaxis]
+    u = model.predict(x, batch_size=num_test_samples)
+
+    # plot u(x) distribution as a color-map
+    fig, ax = plt.subplots(figsize = (7,4))
+    ax.plot(x.flatten(), u.flatten())
+    ax.set_xlabel('x')
+    ax.set_ylabel('u(x)')
+    if save_path is not None:
+        plt.savefig(save_path)
+    plt.show()
+
+
+def plot_training_loss(history, x_scale = "linear", y_scale = "linear", save_path=None):
+    """
+    Plot the training residual, initial, and boundary losses separately.
+    Args:
+        history: The history object returned by the model.fit() method.
+        x_scale: The scale of the x-axis.
+        y_scale: The scale of the y-axis.
+    """
+    plt.figure(figsize=(10, 5), dpi = 150)
+    plt.xscale(x_scale)
+    plt.yscale(y_scale)
+    if len(history[LOSS_INITIAL]) > 0:
+        plt.plot(history[LOSS_INITIAL], label='initial loss')
+    if len(history[LOSS_BOUNDARY]) > 0:
+        plt.plot(history[LOSS_BOUNDARY], label='boundary loss')
+    if len(history[LOSS_RESIDUAL]) > 0:
+        plt.plot(history[LOSS_RESIDUAL], label='residual loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
     if save_path is not None:
         plt.savefig(save_path)
     plt.show()
