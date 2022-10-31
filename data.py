@@ -6,21 +6,29 @@ import numpy as np
 import tensorflow as tf
 
 
-def simulate_burgers(n_samples, boundary_samples = None, random_seed = 42, dtype=tf.float32) -> tuple[tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor]]:
+def simulate_burgers(n_samples, init_function = None, boundary_function = None, random_seed = 42, dtype=tf.float32) -> tuple[tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor]]:
     """
     Simulate the burgers equation
 
     Args:
         n_samples (int): number of samples to generate
+        init_function (function, optional): Function that returns the initial condition of the burgers equation. If None, sin(pi*x) is used. Defaults to None.
+        boundary_function (function, optional): Function that returns the boundary condition of the burgers equation. If None, 0 is used. Defaults to None.
         boundary_samples (int, optional): number of boundary samples to generate. If None, then boundary_samples = n_samples. Defaults to None.
         random_seed (int, optional): Random seed for reproducibility. Defaults to 42.
         dtype (tf.dtype, optional): Data type of the samples. Defaults to tf.float32.
 
     returns:
-        tf.Tensor: Samples of the burgers equation. If training = True, returns a tuple of tensors (equation_samples, initial_samples, boundary_samples).
+        tf.Tensor: Samples of the burgers equation. If training = True, returns a tuple of tensors (equation_samples, initial_samples, n_samples).
     """
-    if boundary_samples is None:
-        boundary_samples = n_samples
+
+    if init_function is None:
+        def init_function(tx):
+            return tf.sin(np.pi*tx[:, 1:])
+
+    if boundary_function is None:
+        def boundary_function(tx):
+            return tf.zeros_like(tx[:, 1:])
 
     r = np.random.RandomState(random_seed)
     tx_samples = r.uniform(0, 1, (n_samples, 2))
@@ -30,20 +38,20 @@ def simulate_burgers(n_samples, boundary_samples = None, random_seed = 42, dtype
     y_samples = tf.zeros((n_samples, 1), dtype = dtype)
 
     
-    tx_init = np.zeros((boundary_samples, 1))
-    tx_init = np.append(tx_init, r.uniform(-1, 1, (boundary_samples, 1)), axis=1)
+    tx_init = np.zeros((n_samples, 1))
+    tx_init = np.append(tx_init, r.uniform(-1, 1, (n_samples, 1)), axis=1)
 
-    tx_boundary = r.uniform(0, 1, (boundary_samples, 1))
-    ones = np.ones((boundary_samples//2, 1))
-    ones = np.append(ones, -np.ones((boundary_samples - boundary_samples//2, 1)), axis=0)
+    tx_boundary = r.uniform(0, 1, (n_samples, 1))
+    ones = np.ones((n_samples//2, 1))
+    ones = np.append(ones, -np.ones((n_samples - n_samples//2, 1)), axis=0)
     tx_boundary = np.append(tx_boundary, ones, axis=1)
     r.shuffle(tx_boundary)
 
     tx_init = tf.convert_to_tensor(tx_init, dtype = dtype)
     tx_boundary = tf.convert_to_tensor(tx_boundary, dtype = dtype)
 
-    y_init = tf.reshape(-tf.sin(np.pi*tx_init[..., 1]), shape = [-1, 1])
-    y_boundary = tf.zeros((boundary_samples, 1), dtype = dtype)
+    y_init = init_function(tx_init)
+    y_boundary = boundary_function(tx_boundary)
     
     return (tx_samples, y_samples), (tx_init, y_init), (tx_boundary, y_boundary)
 

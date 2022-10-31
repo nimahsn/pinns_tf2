@@ -157,10 +157,9 @@ class WavePinn(keras.Model):
   PINN model for the wave equation with Dirichlet boundary conditions.
   """
 
-  def __init__(self, network, dimension, c) -> None:
+  def __init__(self, network, c) -> None:
     super().__init__()
     self.network = network
-    self.dimension = dimension
     self.c = c
 
   @tf.function
