@@ -56,7 +56,7 @@ def simulate_burgers(n_samples, init_function = None, boundary_function = None, 
     return (tx_samples, y_samples), (tx_init, y_init), (tx_boundary, y_boundary)
 
 
-def simulate_wave(n_samples, dimension, phi_function, psi_function, boundary_function_start, boundary_function_end, x_start = 0, length = 1, time = 1, random_seed = 42, dtype=tf.float32) -> tuple[tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor]]:
+def simulate_wave(n_samples, phi_function, psi_function, boundary_function, x_start = 0, length = 1, time = 1, random_seed = 42, dtype = tf.float32) -> tuple[tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor]]:
     """
     Simulate the wave equation in 1D or 2D with a given initial condition and Dirichlet boundary conditions.
     Args:
@@ -79,11 +79,11 @@ def simulate_wave(n_samples, dimension, phi_function, psi_function, boundary_fun
     
     r = np.random.RandomState(random_seed)
     t = r.uniform(0, time, (n_samples, 1))
-    x = r.uniform(x_start, x_start + length, (n_samples, dimension))
+    x = r.uniform(x_start, x_start + length, (n_samples, 1))
     tx_eqn = np.concatenate((t, x), axis = 1)
 
     t_init = np.zeros((n_samples, 1))
-    x_init = r.uniform(x_start, x_start + length, (n_samples, dimension))
+    x_init = r.uniform(x_start, x_start + length, (n_samples, 1))
     tx_init = np.concatenate((t_init, x_init), axis = 1)
 
     t_boundary = r.uniform(0, time, (n_samples, 1))
@@ -97,14 +97,8 @@ def simulate_wave(n_samples, dimension, phi_function, psi_function, boundary_fun
 
     y_eqn = np.zeros((n_samples, 1))
     y_phi = phi_function(tx_init)
-    y_psi = psi_function(tx_eqn)
-    y_boundary = boundary_function_start(t_boundary[:n_samples//2])
-    y_boundary = np.append(y_boundary, boundary_function_end(t_boundary[n_samples//2:]), axis=0)
-
-    y_eqn = tf.convert_to_tensor(y_eqn, dtype = dtype)
-    y_phi = tf.convert_to_tensor(y_phi, dtype = dtype)
-    y_psi = tf.convert_to_tensor(y_psi, dtype = dtype)
-    y_boundary = tf.convert_to_tensor(y_boundary, dtype = dtype)
+    y_psi = psi_function(tx_init)
+    y_boundary = boundary_function(tx_boundary)
 
     return (tx_eqn, y_eqn), (tx_init, y_phi, y_psi), (tx_boundary, y_boundary)
 

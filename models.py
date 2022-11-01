@@ -225,17 +225,17 @@ class WavePinn(keras.Model):
     tx_init = inputs[1]
     tx_bound = inputs[2]
 
-    d2u_dt2, d2u_dx2 = self.input_gradient(tx_equation)
+    d2u_dt2, d2u_dx2 = self.input_diagonal_hessian(tx_equation)
 
     
     # Calculate PDE residual
     pde_residual = d2u_dt2 - (self.c**2) * d2u_dx2
 
-    u_phi, du_dt_psi = self.input_gradient(tx_init)
+    u_init, du_dt_init = self.input_gradient(tx_init)
 
     u_bound = self.network(tx_bound)
 
-    return tf.stack([pde_residual, u_phi, du_dt_psi, u_bound], axis=0)
+    return pde_residual, u_init, du_dt_init, u_bound
 
   
   def fit(self, inputs, labels, epochs, optimizer, progress_interval=500) -> dict[str, list[float]]:
@@ -259,17 +259,17 @@ class WavePinn(keras.Model):
     start_time = time.time()
     for epoch in range(epochs):
       with tf.GradientTape() as tape:
-        residual, u_phi, du_dt_psi, u_bndry = self.call(inputs)
+        residual, u_init, du_dt_init, u_bndry = self.call(inputs)
 
         loss_equation = tf.reduce_mean(tf.square(residual))
-        loss_initial = tf.reduce_mean(tf.square(u_phi - labels[0])) + tf.reduce_mean(tf.square(du_dt_psi - labels[1]))
+        loss_initial = tf.reduce_mean(tf.square(u_init - labels[0])) + tf.reduce_mean(tf.square(du_dt_init - labels[1]))
         loss_boundary = tf.reduce_mean(tf.square(u_bndry - labels[2]))
         loss = loss_equation + loss_initial + loss_boundary
 
       grads = tape.gradient(loss, self.trainable_weights)
       optimizer.apply_gradients(zip(grads, self.trainable_weights))
 
-      _add_to_history_dict(history, loss, loss_equation, loss_initial, loss_boundary)
+      _add_to_history_dict(history, loss_equation, loss_initial, loss_boundary)
       
       if epoch % progress_interval == 0:
         print(f"Epoch: {epoch} Loss: {loss.numpy():.4f} Total Elapsed Time: {time.time() - start_time:.2f}")
