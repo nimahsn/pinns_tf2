@@ -8,7 +8,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 import plotly.graph_objects as go
 import tensorflow as tf
-from models import LOSS_RESIDUAL, LOSS_BOUNDARY, LOSS_INITIAL
+from modules.models import LOSS_RESIDUAL, LOSS_BOUNDARY, LOSS_INITIAL
 
 
 def plot_wave_model(model, x_start, length, time, interactive = False, save_path = None) -> None:
