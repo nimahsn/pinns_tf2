@@ -2,7 +2,6 @@
 Module including the neural network models for the heat, wave, schrodinger, burgers, and poisson equations.
 """
 
-
 from typing import Dict
 from tensorflow import keras
 import tensorflow as tf
@@ -12,6 +11,7 @@ import time
 LOSS_RESIDUAL = "loss_residual"
 LOSS_INITIAL = "loss_initial"
 LOSS_BOUNDARY = "loss_boundary"
+MEAN_ABSOLUTE_ERROR = "mean_absolute_error"
 
 
 def _create_history_dict():
@@ -19,16 +19,19 @@ def _create_history_dict():
         LOSS_RESIDUAL: [],
         LOSS_INITIAL: [],
         LOSS_BOUNDARY: [],
+        MEAN_ABSOLUTE_ERROR: []
     }
 
 
-def _add_to_history_dict(history_dict, loss_residual, loss_initial, loss_boundary):
+def _add_to_history_dict(history_dict, loss_residual = None, loss_initial = None, loss_boundary = None, mean_absolute_error = None):
   if loss_residual is not None:
     history_dict[LOSS_RESIDUAL].append(loss_residual)
   if loss_initial is not None:
     history_dict[LOSS_INITIAL].append(loss_initial)
   if loss_boundary is not None:
     history_dict[LOSS_BOUNDARY].append(loss_boundary)
+  if mean_absolute_error is not None:
+    history_dict[MEAN_ABSOLUTE_ERROR].append(mean_absolute_error)
 
 
 class BurgersPinn(keras.Model):
@@ -37,7 +40,7 @@ class BurgersPinn(keras.Model):
     self.network = network
     self.nu = nu
 
-  def fit(self, inputs, labels, epochs, optimizer, progress_interval=500) -> dict[str, list[float]]:
+  def fit(self, inputs, labels, epochs, optimizer, u_exact=None, progress_interval=500) -> dict[str, list[float]]:
     """
     Train the model with the given inputs and optimizer.
 
@@ -57,14 +60,21 @@ class BurgersPinn(keras.Model):
 
     for epoch in range(epochs):
       with tf.GradientTape() as tape:
-        burgers_eq, u_init, u_bndry = self.call(inputs)
+        u, burgers_eq, u_init, u_bndry = self.call(inputs)
         loss_residual = tf.reduce_mean(burgers_eq**2) 
         loss_init = tf.reduce_mean(tf.square(u_init - labels[1]))
         loss_boundary = tf.reduce_mean(tf.square(u_bndry - labels[2]))
         loss = loss_residual + loss_init + loss_boundary
       grads = tape.gradient(loss, self.trainable_weights)
       optimizer.apply_gradients(zip(grads, self.trainable_weights))
-      _add_to_history_dict(history_dict, loss_residual, loss_init, loss_boundary)
+
+      if u_exact is not None:
+        abs_error = tf.reduce_mean(tf.abs(u - u_exact))
+      else:
+        abs_error = None
+
+      _add_to_history_dict(history_dict, loss_residual, loss_init, loss_boundary, abs_error)
+
       if epoch % progress_interval == 0:
         print(f"Epoch: {epoch} Loss: {loss.numpy():.4f} Total Elapsed Time: {time.time() - start_time:.2f}")
     return history_dict
@@ -125,7 +135,7 @@ class BurgersPinn(keras.Model):
     u_init = u_ib[:n_i]
     u_bound = u_ib[n_i:]
 
-    return burgers_eq, u_init, u_bound 
+    return u_eqn, burgers_eq, u_init, u_bound 
   
   
   @staticmethod
@@ -183,7 +193,7 @@ class WavePinn(keras.Model):
     hessian = g2tape.batch_jacobian(first_order, x)
     u_tt = hessian[..., 0, 0]
     u_xx = hessian[..., 1, 1]
-    return u_tt, u_xx
+    return u, u_tt, u_xx
 
   
   @tf.function
@@ -225,7 +235,7 @@ class WavePinn(keras.Model):
     tx_init = inputs[1]
     tx_bound = inputs[2]
 
-    d2u_dt2, d2u_dx2 = self.input_diagonal_hessian(tx_equation)
+    u, d2u_dt2, d2u_dx2 = self.input_diagonal_hessian(tx_equation)
 
     
     # Calculate PDE residual
@@ -235,10 +245,10 @@ class WavePinn(keras.Model):
 
     u_bound = self.network(tx_bound)
 
-    return pde_residual, u_init, du_dt_init, u_bound
+    return u, pde_residual, u_init, du_dt_init, u_bound
 
   
-  def fit(self, inputs, labels, epochs, optimizer, progress_interval=500) -> dict[str, list[float]]:
+  def fit(self, inputs, labels, epochs, optimizer, u_exact=None, progress_interval=500) -> dict[str, list[float]]:
     """
     Train the model with the given inputs and optimizer.
 
@@ -259,7 +269,7 @@ class WavePinn(keras.Model):
     start_time = time.time()
     for epoch in range(epochs):
       with tf.GradientTape() as tape:
-        residual, u_init, du_dt_init, u_bndry = self.call(inputs)
+        u, residual, u_init, du_dt_init, u_bndry = self.call(inputs)
 
         loss_equation = tf.reduce_mean(tf.square(residual))
         loss_initial = tf.reduce_mean(tf.square(u_init - labels[0])) + tf.reduce_mean(tf.square(du_dt_init - labels[1]))
@@ -269,7 +279,12 @@ class WavePinn(keras.Model):
       grads = tape.gradient(loss, self.trainable_weights)
       optimizer.apply_gradients(zip(grads, self.trainable_weights))
 
-      _add_to_history_dict(history, loss_equation, loss_initial, loss_boundary)
+      if u_exact is not None:
+        abs_error = tf.reduce_mean(tf.abs(u - u_exact))
+      else:
+        abs_error = None
+
+      _add_to_history_dict(history, loss_equation, loss_initial, loss_boundary, abs_error)
       
       if epoch % progress_interval == 0:
         print(f"Epoch: {epoch} Loss: {loss.numpy():.4f} Total Elapsed Time: {time.time() - start_time:.2f}")
@@ -319,7 +334,7 @@ class HeatPinn(keras.Model):
     self.k = k
 
 
-  def fit(self, inputs, labels, epochs, optimizer, progress_interval=500) -> dict[str, list[float]]:
+  def fit(self, inputs, labels, epochs, optimizer, u_exact=None, progress_interval=500) -> dict[str, list[float]]:
     """
     Train the model with the given inputs and optimizer.
 
@@ -340,7 +355,7 @@ class HeatPinn(keras.Model):
     start_time = time.time()
     for epoch in range(epochs):
       with tf.GradientTape() as tape:
-        residual, u_init, u_bndry = self.call(inputs)
+        u, residual, u_init, u_bndry = self.call(inputs)
 
         loss_residual = tf.reduce_mean(tf.square(residual))
         loss_init = tf.reduce_mean(tf.square(u_init - labels[0]))
@@ -350,7 +365,12 @@ class HeatPinn(keras.Model):
       grads = tape.gradient(loss, self.trainable_weights)
       optimizer.apply_gradients(zip(grads, self.trainable_weights))
 
-      _add_to_history_dict(history, loss_residual, loss_init, loss_boundary)
+      if u_exact is not None:
+        abs_error = tf.reduce_mean(tf.abs(u - u_exact))
+      else:
+        abs_error = None
+
+      _add_to_history_dict(history, loss_residual, loss_init, loss_boundary, abs_error)
       
       if epoch % progress_interval == 0:
         print(f"Epoch: {epoch} Loss: {loss.numpy():.4f} Total Elapsed Time: {time.time() - start_time:.2f}")
@@ -382,7 +402,7 @@ class HeatPinn(keras.Model):
 
     d2u_dx2 = gg.batch_jacobian(du_dx, tx)[..., 1]
 
-    return du_dt, d2u_dx2
+    return u, du_dt, d2u_dx2
     
 
   
@@ -406,7 +426,7 @@ class HeatPinn(keras.Model):
     tx_init = inputs[1]
     tx_bound = inputs[2]
 
-    du_dt, d2u_dx2 = self.input_gradient(tx_equation)
+    u, du_dt, d2u_dx2 = self.input_gradient(tx_equation)
 
     
     # Calculate PDE residual
@@ -418,7 +438,7 @@ class HeatPinn(keras.Model):
     u_init = u_ib[:n_i]
     u_bndry = u_ib[n_i:]
 
-    return pde_residual, u_init, u_bndry
+    return u, pde_residual, u_init, u_bndry
 
   @staticmethod
   def build_network(layers, n_inputs=2, n_outputs=1, activation=keras.activations.tanh, initialization=keras.initializers.glorot_normal):
@@ -443,9 +463,9 @@ class HeatPinn(keras.Model):
     return keras.Model(inputs=[inputs], outputs = [outputs])
 
 
-class SchroedingerPinn(keras.Model):
+class SchrodingerPinn(keras.Model):
   """
-  Keras PINN model for the Schroedinger PDE.
+  Keras PINN model for the Schrodinger PDE.
   Attributes:
     network (keras.Model): The neural network used to approximate the solution.
     k (float): The planck constant. Default is 0.5.
@@ -457,7 +477,7 @@ class SchroedingerPinn(keras.Model):
     self.k = k
 
 
-  def fit(self, inputs, labels, epochs, optimizer, n_boundary_samples, progress_interval=500) -> dict[str, list[float]]:
+  def fit(self, inputs, labels, epochs, optimizer, n_boundary_samples, u_exact=None, progress_interval=500) -> dict[str, list[float]]:
     """
     Train the model with the given inputs and optimizer.
     Args:
@@ -476,7 +496,7 @@ class SchroedingerPinn(keras.Model):
     start_time = time.time()
     for epoch in range(epochs):
       with tf.GradientTape() as tape:
-        residual, h_init, h_bndry, dhb_dx = self.call(inputs)
+        h, residual, h_init, h_bndry, dhb_dx = self.call(inputs)
 
         loss_residual = tf.reduce_mean(tf.abs(residual))
         loss_init = tf.reduce_mean(tf.reduce_sum(tf.square(h_init - labels[0]), axis=1))
@@ -486,7 +506,12 @@ class SchroedingerPinn(keras.Model):
       grads = tape.gradient(loss, self.trainable_weights)
       optimizer.apply_gradients(zip(grads, self.trainable_weights))
 
-      _add_to_history_dict(history, loss_residual, loss_init, loss_boundary)
+      if u_exact is not None:
+        abs_error = tf.reduce_mean(tf.abs(h - u_exact))
+      else:
+        abs_error = None
+
+      _add_to_history_dict(history, loss_residual, loss_init, loss_boundary, abs_error)
       
       if epoch % progress_interval == 0:
         print(f"Epoch: {epoch} Loss: {loss.numpy():.4f} Total Elapsed Time: {time.time() - start_time:.2f}")
@@ -561,7 +586,7 @@ class SchroedingerPinn(keras.Model):
 
     h_bound, dhb_dx = self.input_gradient_boundary(tx_bound)
 
-    return pde_residual, h_init, h_bound, dhb_dx
+    return h, pde_residual, h_init, h_bound, dhb_dx
 
   
   @staticmethod
@@ -594,13 +619,13 @@ class PoissonPinn(keras.Model):
     self.network = network
 
 
-  def fit(self, inputs, labels, epochs, optimizer, progress_interval=500) -> dict[str, list[float]]:
+  def fit(self, inputs, labels, epochs, optimizer, u_exact = None, progress_interval=500) -> dict[str, list[float]]:
 
     history = _create_history_dict()
     start_time = time.time()
     for epoch in range(epochs):
       with tf.GradientTape() as tape:
-        d2u_dx2, u_bndry = self.call(inputs)
+        u, d2u_dx2, u_bndry = self.call(inputs)
 
         loss_residual = tf.reduce_mean(tf.square(d2u_dx2 - labels[0]))
         loss_boundary = tf.reduce_mean(tf.square(u_bndry - labels[1]))
@@ -609,7 +634,12 @@ class PoissonPinn(keras.Model):
       grads = tape.gradient(loss, self.trainable_weights)
       optimizer.apply_gradients(zip(grads, self.trainable_weights))
 
-      _add_to_history_dict(history, loss_residual, None, loss_boundary)
+      if u_exact is not None:
+        abs_error = tf.reduce_mean(tf.abs(u - u_exact))
+      else:
+        abs_error = None
+
+      _add_to_history_dict(history, loss_residual, None, loss_boundary, abs_error)
 
       if epoch % progress_interval == 0:
         print(f"Epoch: {epoch} Loss: {loss.numpy():.4f} Total Elapsed Time: {time.time() - start_time:.2f}")
@@ -621,10 +651,10 @@ class PoissonPinn(keras.Model):
     x_equation = inputs[0]
     x_boundary = inputs[1]
 
-    d2u_dx2 = self.laplace(x_equation)
+    u, d2u_dx2 = self.laplace(x_equation)
     u_boundary = self.network(x_boundary)
 
-    return d2u_dx2, u_boundary
+    return u, d2u_dx2, u_boundary
 
 
   @tf.function
@@ -640,7 +670,7 @@ class PoissonPinn(keras.Model):
 
     d2u_dx2 = gg.batch_jacobian(du_dx, x)[:, 0]
 
-    return d2u_dx2
+    return u, d2u_dx2
 
 
   @staticmethod

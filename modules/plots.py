@@ -8,7 +8,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 import plotly.graph_objects as go
 import tensorflow as tf
-from modules.models import LOSS_RESIDUAL, LOSS_BOUNDARY, LOSS_INITIAL
+from modules.models import LOSS_RESIDUAL, LOSS_BOUNDARY, LOSS_INITIAL, MEAN_ABSOLUTE_ERROR
 
 
 def plot_wave_model(model, x_start, length, time, interactive = False, save_path = None) -> None:
@@ -248,6 +248,8 @@ def plot_training_loss(history, x_scale = "linear", y_scale = "linear", save_pat
         plt.plot(history[LOSS_BOUNDARY], label='boundary loss')
     if len(history[LOSS_RESIDUAL]) > 0:
         plt.plot(history[LOSS_RESIDUAL], label='residual loss')
+    if len(history[MEAN_ABSOLUTE_ERROR]) > 0:
+        plt.plot(history[MEAN_ABSOLUTE_ERROR], label='mean absolute error')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.legend()
