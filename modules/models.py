@@ -350,7 +350,7 @@ class HeatPinn(keras.Model):
       grads = tape.gradient(loss, self.trainable_weights)
       optimizer.apply_gradients(zip(grads, self.trainable_weights))
 
-      _add_to_history_dict(history, loss, loss_residual, loss_init, loss_boundary)
+      _add_to_history_dict(history, loss_residual, loss_init, loss_boundary)
       
       if epoch % progress_interval == 0:
         print(f"Epoch: {epoch} Loss: {loss.numpy():.4f} Total Elapsed Time: {time.time() - start_time:.2f}")
