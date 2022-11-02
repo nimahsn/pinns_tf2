@@ -256,3 +256,20 @@ def plot_training_loss(history, x_scale = "linear", y_scale = "linear", save_pat
     if save_path is not None:
         plt.savefig(save_path)
     plt.show()
+
+
+def plot_pointwise_error(y_true, y_pred, x, figsize = (10, 5), save_path=None):
+    """
+    Plot the pointwise error between the true and predicted values.
+    Args:
+        y_true: The true values.
+        y_pred: The predicted values.
+        x: The x-values.
+    """
+    plt.figure(figsize=figsize, dpi = 150)
+    plt.plot(x, np.abs(y_true - y_pred))
+    plt.xlabel('x')
+    plt.ylabel('Absolute error')
+    if save_path is not None:
+        plt.savefig(save_path)
+    plt.show()
