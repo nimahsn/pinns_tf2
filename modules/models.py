@@ -161,7 +161,6 @@ class BurgersPinn(keras.Model):
     return keras.Model(inputs=[inputs], outputs = [outputs])
 
 
-# Review the model and related utils function: Not sure about boundary and initial conditions
 class WavePinn(keras.Model):
   """
   PINN model for the wave equation with Dirichlet boundary conditions.
@@ -718,8 +717,31 @@ class AdvectionDiffusionPinn(keras.Model):
     self.v = v
 
   
-  def fit(self, inputs):
-    pass
+  def fit(self, inputs, labels, epochs, optimizer, u_exact = None, progress_interval=500) -> dict[str, list[float]]:
+
+    history = _create_history_dict()
+    start_time = time.time()
+    for epoch in range(epochs):
+      with tf.gradientTape() as tape:
+        u, residual, u_bndry = self.call(inputs)
+
+        loss_residual = tf.reduce_mean(tf.square(residual))
+        loss_boundary = tf.reduce_mean(tf.square(u_bndry - labels[0]))
+        loss = loss_residual + loss_boundary  
+      
+      grads = tape.gradient(loss, self.trainable_weights)
+      optimizer.apply_gradients(zip(grads, self.trainable_weights))
+
+      abs_error = None
+      if u_exact is not None:
+        abs_error = tf.reduce_mean(tf.abs(u - u_exact))
+      _add_to_history_dict(history, loss_residual, None, loss_boundary, abs_error)
+
+      if epoch % progress_interval == 0:
+        print(f"Epoch: {epoch} Loss: {loss.numpy():.4f} Total Elapsed Time: {time.time() - start_time:.2f}")
+    
+    return history
+
 
 
   @tf.function
@@ -771,3 +793,24 @@ class AdvectionDiffusionPinn(keras.Model):
     return u, residual, u_boundary
 
 
+  @staticmethod
+  def build_network(layers, n_inputs=1, n_outputs=1, activation=keras.activations.tanh, initialization=keras.initializers.glorot_normal):
+    """
+    Builds a fully connected neural network with the specified number of layers and nodes per layer.
+
+    Args:
+        layers (list): List of integers specifying the number of nodes in each layer.
+        n_inputs (int): Number of inputs to the network. Default is 2.
+        n_outputs (int): Number of outputs from the network. Default is 2.
+        activation (function): Activation function to use in each layer.
+        initialization (function): Initialization function to use in each layer.
+    returns:
+        keras.Model: A keras model representing the neural network.
+    """
+    inputs = keras.layers.Input((n_inputs))
+    x = inputs
+    for i in layers:
+      x = keras.layers.Dense(i, activation = activation, kernel_initializer=initialization)(x)
+    
+    outputs = keras.layers.Dense(n_outputs, kernel_initializer=initialization)(x)
+    return keras.Model(inputs=[inputs], outputs = [outputs])

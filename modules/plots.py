@@ -231,6 +231,28 @@ def plot_poisson_model(model, x_start, length, save_path = None) -> None:
     plt.show()
 
 
+def plot_advection_model(model, x_start = 0.0, length = 1.0, save_path = None) -> None:
+    """
+    Plot the model predictions for the advection equation.
+    Args:
+        model: A trained AdvectionPinn model.
+        length: The length of the domain.
+        save_path: The path to save the plot to.
+    """
+    num_test_samples = 1000
+    x = np.linspace(x_start, x_start + length, num_test_samples)[:, np.newaxis]
+    u = model.predict(x, batch_size=num_test_samples)
+
+    # plot u(x) distribution as a color-map
+    fig, ax = plt.subplots(figsize = (7,4))
+    ax.plot(x.flatten(), u.flatten())
+    ax.set_xlabel('x')
+    ax.set_ylabel('u(x)')
+    if save_path is not None:
+        plt.savefig(save_path)
+    plt.show()
+
+
 def plot_training_loss(history, x_scale = "linear", y_scale = "linear", save_path=None):
     """
     Plot the training residual, initial, and boundary losses separately.

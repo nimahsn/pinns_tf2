@@ -202,3 +202,36 @@ def simulate_poisson(n_samples, rhs_function, boundary_function, x_start: float 
     u_boundary = boundary_function(x_boundary)
 
     return (x_eqn, rhs_eqn), (x_boundary, u_boundary)
+
+
+def simulate_advection(n_samples, boundary_function: function = None, x_start: float = 0.0, length: float = 1, random_seed = 42, dtype = tf.float32):
+    """
+    Simulate the steady advection diffusion equation in 1D with a given boundary conditions.
+    Args:
+        n_samples (int): number of samples to generate
+        boundary_function (function): Function that returns the boundary condition of the advection diffusion equation on u.\
+            If None, the boundary condition is set to zero on start and one on end. Defaults to None.
+        x_start (float, optional): Start of the boundary. Defaults to 0.0.
+        length (float, optional): Length of the domain. Defaults to 1.0.
+        random_seed (int, optional): Random seed for reproducibility. Defaults to 42.
+        dtype (tf.dtype, optional): Data type of the samples. Defaults to tf.float32.
+    """
+
+    if boundary_function is None:
+        def boundary_function(x):
+            return tf.where(x == x_start, 0.0, 1.0)
+
+    r = np.random.RandomState(random_seed)
+    
+    x_eqn = r.uniform(x_start, x_start + length, (n_samples, 1))
+
+    x_boundary = np.ones((n_samples//2, 1)) * x_start
+    x_boundary = np.append(x_boundary, np.ones((n_samples - n_samples//2, 1)) * (x_start + length), axis=0)
+
+    x_eqn = tf.convert_to_tensor(x_eqn, dtype = dtype)
+    x_boundary = tf.convert_to_tensor(x_boundary, dtype = dtype)
+
+    f_eqn = tf.zeros((n_samples, 1))
+    u_boundary = boundary_function(x_boundary)
+
+    return (x_eqn, f_eqn), (x_boundary, u_boundary)
