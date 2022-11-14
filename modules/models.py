@@ -694,3 +694,80 @@ class PoissonPinn(keras.Model):
     
     outputs = keras.layers.Dense(n_outputs, kernel_initializer=initialization)(x)
     return keras.Model(inputs=[inputs], outputs = [outputs])
+
+
+class AdvectionDiffusionPinn(keras.Model):
+  """
+  A class for solving the advection-diffusion equation using a physics informed neural network.
+  Attributes:
+      network (keras.Model): A neural network that takes in the spatial coordinates and outputs the solution.
+      k (float): The diffusion coefficient.
+      v (float): The advection velocity.
+  """
+  
+  def __init__(self, network, k, v) -> None:
+    """
+    Args:
+        network (keras.Model): A neural network that takes in the spatial coordinates and outputs the solution.
+        k (float): The diffusion coefficient.
+        v (float): The advection velocity.
+    """
+    super().__init__()
+    self.network = network
+    self.k = k
+    self.v = v
+
+  
+  def fit(self, inputs):
+    pass
+
+
+  @tf.function
+  def laplace(self, x):
+    """
+    Calculates the first and second derivatives of the solution with respect to the spatial coordinates.
+
+    Args:
+        x (tf.Tensor): A tensor of shape (n, 1) containing the spatial coordinate.
+    Returns:
+        tf.Tensor: A tensor of shape (n, 1) containing the solution.
+        tf.Tensor: A tensor of shape (n, 1) containing the first derivative of the solution.
+        tf.Tensor: A tensor of shape (n, 1) containing the second derivative of the solution.
+    """
+
+    with tf.GradientTape() as gg:
+      gg.watch(x)
+      
+      with tf.GradientTape() as g:
+        g.watch(x)
+        u = self.network(x)
+      
+      du_dx = g.batch_jacobian(u, x)[:, 0]
+
+    d2u_dx2 = gg.batch_jacobian(du_dx, x)[:, 0]
+
+    return u, du_dx, d2u_dx2  
+
+
+  def call(self, inputs):
+    """
+    Performs a forward pass through the network and calculates the residual and boundary solution.
+
+    Args:
+        inputs (list): A list of tensors containing the spatial coordinates for the residual and boundary equations.
+    Returns:
+        tf.Tensor: A tensor of shape (n, 1) containing the solution.
+        tf.Tensor: A tensor of shape (n, 1) containing the residual.
+        tf.Tensor: A tensor of shape (n, 1) containing the boundary solution.
+    """
+
+    x_equation = inputs[0]
+    x_boundary = inputs[1]
+
+    u, du_dx, d2u_dx2 = self.laplace(x_equation)
+    u_boundary = self.network(x_boundary)
+    residual = self.v * du_dx - self.k * d2u_dx2
+
+    return u, residual, u_boundary
+
+
