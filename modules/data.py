@@ -4,6 +4,7 @@ Module for the data generation of the heat, wave, schrodinger, burgers, and pois
 
 import numpy as np
 import tensorflow as tf
+from typing import Callable
 
 
 def simulate_burgers(n_samples, init_function = None, boundary_function = None, random_seed = 42, dtype=tf.float32) -> tuple[tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor]]:
@@ -204,7 +205,7 @@ def simulate_poisson(n_samples, rhs_function, boundary_function, x_start: float 
     return (x_eqn, rhs_eqn), (x_boundary, u_boundary)
 
 
-def simulate_advection(n_samples, boundary_function: function = None, x_start: float = 0.0, length: float = 1, random_seed = 42, dtype = tf.float32):
+def simulate_advection(n_samples, boundary_function: Callable = None, x_start: float = 0.0, length: float = 1, random_seed = 42, dtype = tf.float32):
     """
     Simulate the steady advection diffusion equation in 1D with a given boundary conditions.
     Args:

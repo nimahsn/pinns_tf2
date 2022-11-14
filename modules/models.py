@@ -722,7 +722,7 @@ class AdvectionDiffusionPinn(keras.Model):
     history = _create_history_dict()
     start_time = time.time()
     for epoch in range(epochs):
-      with tf.gradientTape() as tape:
+      with tf.GradientTape() as tape:
         u, residual, u_bndry = self.call(inputs)
 
         loss_residual = tf.reduce_mean(tf.square(residual))
