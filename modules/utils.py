@@ -4,7 +4,7 @@ Utility functions for saving and loading models, plots, logs, etc.
 
 import os
 from pathlib import Path
-from models import LOSS_BOUNDARY, LOSS_INITIAL, LOSS_RESIDUAL, MEAN_ABSOLUTE_ERROR
+from modules.models import LOSS_BOUNDARY, LOSS_INITIAL, LOSS_RESIDUAL, MEAN_ABSOLUTE_ERROR
 import numpy as np
 import pandas as pd
 
