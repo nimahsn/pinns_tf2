@@ -4,10 +4,10 @@ Module for the data generation of the heat, wave, schrodinger, burgers, and pois
 
 import numpy as np
 import tensorflow as tf
-from typing import Callable
+from typing import Callable, Tuple
 
 
-def simulate_burgers(n_samples, init_function = None, boundary_function = None, random_seed = 42, dtype=tf.float32) -> tuple[tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor]]:
+def simulate_burgers(n_samples, init_function = None, boundary_function = None, random_seed = 42, dtype=tf.float32) -> Tuple[Tuple[tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tensor]]:
     """
     Simulate the burgers equation
 
@@ -57,7 +57,7 @@ def simulate_burgers(n_samples, init_function = None, boundary_function = None, 
     return (tx_samples, y_samples), (tx_init, y_init), (tx_boundary, y_boundary)
 
 
-def simulate_wave(n_samples, phi_function, psi_function, boundary_function, x_start = 0, length = 1, time = 1, random_seed = 42, dtype = tf.float32) -> tuple[tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor]]:
+def simulate_wave(n_samples, phi_function, psi_function, boundary_function, x_start = 0, length = 1, time = 1, random_seed = 42, dtype = tf.float32) -> Tuple[Tuple[tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tensor]]:
     """
     Simulate the wave equation in 1D or 2D with a given initial condition and Dirichlet boundary conditions.
     Args:
@@ -104,7 +104,7 @@ def simulate_wave(n_samples, phi_function, psi_function, boundary_function, x_st
     return (tx_eqn, y_eqn), (tx_init, y_phi, y_psi), (tx_boundary, y_boundary)
 
 
-def simulate_heat(n_samples, phi_function, boundary_function, length, time, random_seed = 42, dtype=tf.float32) -> tuple[tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor]]:
+def simulate_heat(n_samples, phi_function, boundary_function, length, time, random_seed = 42, dtype=tf.float32) -> Tuple[Tuple[tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tensor]]:
     """
     Simulate the heat equation in 1D with a given initial condition and Dirichlet boundary conditions.
     Args:
@@ -176,7 +176,7 @@ def simulate_schrodinger(n_samples, init_function, x_start, length, time, random
     return (tx_eqn, y_eqn), (tx_init, y_init), tx_boundary
 
 
-def simulate_poisson(n_samples, rhs_function, boundary_function, x_start: float = 0.0, length: float = 1.0, random_seed = 42, dtype = tf.float32) -> tuple[tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor]]:
+def simulate_poisson(n_samples, rhs_function, boundary_function, x_start: float = 0.0, length: float = 1.0, random_seed = 42, dtype = tf.float32) -> Tuple[Tuple[tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tensor]]:
     """
     Simulate the Poisson equation in 1D with a given right hand side and Dirichlet boundary conditions.
     Args:

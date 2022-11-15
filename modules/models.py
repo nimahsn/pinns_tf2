@@ -2,7 +2,7 @@
 Module including the neural network models for the heat, wave, schrodinger, burgers, and poisson equations.
 """
 
-from typing import Dict
+from typing import Dict, List
 from tensorflow import keras
 import tensorflow as tf
 import numpy as np
@@ -40,7 +40,7 @@ class BurgersPinn(keras.Model):
     self.network = network
     self.nu = nu
 
-  def fit(self, inputs, labels, epochs, optimizer, u_exact=None, progress_interval=500) -> dict[str, list[float]]:
+  def fit(self, inputs, labels, epochs, optimizer, u_exact=None, progress_interval=500) -> Dict[str, List[float]]:
     """
     Train the model with the given inputs and optimizer.
 
@@ -247,7 +247,7 @@ class WavePinn(keras.Model):
     return u, pde_residual, u_init, du_dt_init, u_bound
 
   
-  def fit(self, inputs, labels, epochs, optimizer, u_exact=None, progress_interval=500) -> dict[str, list[float]]:
+  def fit(self, inputs, labels, epochs, optimizer, u_exact=None, progress_interval=500) -> Dict[str, List[float]]:
     """
     Train the model with the given inputs and optimizer.
 
@@ -333,7 +333,7 @@ class HeatPinn(keras.Model):
     self.k = k
 
 
-  def fit(self, inputs, labels, epochs, optimizer, u_exact=None, progress_interval=500) -> dict[str, list[float]]:
+  def fit(self, inputs, labels, epochs, optimizer, u_exact=None, progress_interval=500) -> Dict[str, List[float]]:
     """
     Train the model with the given inputs and optimizer.
 
@@ -476,7 +476,7 @@ class SchrodingerPinn(keras.Model):
     self.k = k
 
 
-  def fit(self, inputs, labels, epochs, optimizer, n_boundary_samples, u_exact=None, progress_interval=500) -> dict[str, list[float]]:
+  def fit(self, inputs, labels, epochs, optimizer, n_boundary_samples, u_exact=None, progress_interval=500) -> Dict[str, List[float]]:
     """
     Train the model with the given inputs and optimizer.
     Args:
@@ -618,7 +618,7 @@ class PoissonPinn(keras.Model):
     self.network = network
 
 
-  def fit(self, inputs, labels, epochs, optimizer, u_exact = None, progress_interval=500) -> dict[str, list[float]]:
+  def fit(self, inputs, labels, epochs, optimizer, u_exact = None, progress_interval=500) -> Dict[str, List[float]]:
 
     history = _create_history_dict()
     start_time = time.time()
@@ -717,7 +717,7 @@ class AdvectionDiffusionPinn(keras.Model):
     self.v = v
 
   
-  def fit(self, inputs, labels, epochs, optimizer, u_exact = None, progress_interval=500) -> dict[str, list[float]]:
+  def fit(self, inputs, labels, epochs, optimizer, u_exact = None, progress_interval=500) -> Dict[str, List[float]]:
 
     history = _create_history_dict()
     start_time = time.time()
