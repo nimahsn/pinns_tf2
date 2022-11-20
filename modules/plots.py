@@ -200,7 +200,7 @@ def plot_schrodinger_model(model, x_start, length, time, save_path = None) -> No
         h = model.predict(tx, batch_size=num_test_samples)
         u = tf.abs(tf.complex(h[:,0:1], h[:,1:2]))
         plt.plot(x_flat, u)
-        plt.title('t={}'.format(t_cs))
+        plt.title(f't={t_cs:.3f}')
         plt.xlabel('x')
         plt.ylabel('|h(t,x)|')
     plt.tight_layout()
@@ -265,13 +265,13 @@ def plot_training_loss(history, x_scale = "linear", y_scale = "linear", save_pat
     plt.xscale(x_scale)
     plt.yscale(y_scale)
     if len(history[LOSS_INITIAL]) > 0:
-        plt.plot(history[LOSS_INITIAL], label='initial loss')
+        plt.plot(history[LOSS_INITIAL], label='initial loss', alpha=0.8)
     if len(history[LOSS_BOUNDARY]) > 0:
-        plt.plot(history[LOSS_BOUNDARY], label='boundary loss')
+        plt.plot(history[LOSS_BOUNDARY], label='boundary loss', alpha=0.8)
     if len(history[LOSS_RESIDUAL]) > 0:
-        plt.plot(history[LOSS_RESIDUAL], label='residual loss')
+        plt.plot(history[LOSS_RESIDUAL], label='residual loss', alpha=0.8)
     if len(history[MEAN_ABSOLUTE_ERROR]) > 0:
-        plt.plot(history[MEAN_ABSOLUTE_ERROR], label='mean absolute error')
+        plt.plot(history[MEAN_ABSOLUTE_ERROR], label='mean absolute error', alpha = 0.8)
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.legend()

@@ -7,6 +7,7 @@ from pathlib import Path
 from modules.models import LOSS_BOUNDARY, LOSS_INITIAL, LOSS_RESIDUAL, MEAN_ABSOLUTE_ERROR
 import numpy as np
 import pandas as pd
+import scipy.io
 
 def get_id(layers, optimizer, initialization, activation):
     """
@@ -54,3 +55,9 @@ def get_train_plot_name(id, directory):
     name = id+'.jpg'
     return os.path.join(plot_directory, name)
 
+
+def load_mat_data(path):
+    """
+    Loads the mat data from path into a dictionary
+    """
+    return scipy.io.loadmat(path)

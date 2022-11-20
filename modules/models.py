@@ -476,7 +476,8 @@ class SchrodingerPinn(keras.Model):
     self.k = k
 
 
-  def fit(self, inputs, labels, epochs, optimizer, n_boundary_samples, u_exact=None, progress_interval=500) -> Dict[str, List[float]]:
+  def fit(self, inputs, labels, epochs, optimizer, n_boundary_samples, exact_data=None,\
+    progress_interval=500, error_interval=100) -> Dict[str, List[float]]:
     """
     Train the model with the given inputs and optimizer.
     Args:
@@ -486,11 +487,16 @@ class SchrodingerPinn(keras.Model):
       optimizer : The optimizer to use for training.
       n_boundary_samples: The number of boundary samples to use for training.
       progress_interval: The number of epochs between each progress report.
+      error_interval: The number of epochs between each error calculation.
     Returns:
       A dictionary containing the loss history for each of the three loss terms.
     """
 
     history = _create_history_dict()
+    abs_error = None
+    if exact_data is not None:
+      print("Warning: exact_data is not used for training the schrodinger's pinn. It is only used for calculating the absolute error. \
+      Since calculating the absolute error is computationally expensive, it is only calculated every error_interval epochs.")
 
     start_time = time.time()
     for epoch in range(epochs):
@@ -505,10 +511,9 @@ class SchrodingerPinn(keras.Model):
       grads = tape.gradient(loss, self.trainable_weights)
       optimizer.apply_gradients(zip(grads, self.trainable_weights))
 
-      if u_exact is not None:
-        abs_error = tf.reduce_mean(tf.abs(h - u_exact))
-      else:
-        abs_error = None
+      if exact_data is not None and epoch % error_interval == 0:
+        preds = self.network.predict(exact_data[:, 0:2], verbose=0)
+        abs_error = tf.reduce_mean(tf.sqrt(tf.reduce_sum(tf.square(preds - exact_data[:, 2:]), axis=1)))      
 
       _add_to_history_dict(history, loss_residual, loss_init, loss_boundary, abs_error)
       
