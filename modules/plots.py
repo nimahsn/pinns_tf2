@@ -279,6 +279,47 @@ def plot_training_loss(history, x_scale = "linear", y_scale = "linear", save_pat
         plt.savefig(save_path)
     plt.show()
 
+def plot_training_loss_linlog(history, save_path=None):
+    """
+        plot training loss with both linear and log y scales
+
+        Args:
+            history: The history object returned by the model.fit() method.
+            save_path: The path to save the plot to.
+    """
+    plt.figure(figsize=(10, 5), dpi = 150)
+    plt.subplot(1, 2, 1)
+    plt.xscale("linear")
+    plt.yscale("linear")
+    if len(history[LOSS_INITIAL]) > 0:
+        plt.plot(history[LOSS_INITIAL], label='initial loss', alpha=0.8)
+    if len(history[LOSS_BOUNDARY]) > 0:
+        plt.plot(history[LOSS_BOUNDARY], label='boundary loss', alpha=0.8)
+    if len(history[LOSS_RESIDUAL]) > 0:
+        plt.plot(history[LOSS_RESIDUAL], label='residual loss', alpha=0.8)
+    if len(history[MEAN_ABSOLUTE_ERROR]) > 0:
+        plt.plot(history[MEAN_ABSOLUTE_ERROR], label='mean absolute error', alpha = 0.8)
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.subplot(1, 2, 2)
+    plt.xscale("linear")
+    plt.yscale("log")
+    if len(history[LOSS_INITIAL]) > 0:
+        plt.plot(history[LOSS_INITIAL], label='initial loss', alpha=0.8)
+    if len(history[LOSS_BOUNDARY]) > 0:
+        plt.plot(history[LOSS_BOUNDARY], label='boundary loss', alpha=0.8)
+    if len(history[LOSS_RESIDUAL]) > 0:
+        plt.plot(history[LOSS_RESIDUAL], label='residual loss', alpha=0.8)
+    if len(history[MEAN_ABSOLUTE_ERROR]) > 0:
+        plt.plot(history[MEAN_ABSOLUTE_ERROR], label='mean absolute error', alpha = 0.8)
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    if save_path is not None:
+        plt.savefig(save_path)
+    plt.show()
+
 
 def plot_pointwise_error(y_true, y_pred, x, figsize = (10, 5), save_path=None):
     """
