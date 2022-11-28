@@ -261,7 +261,7 @@ def plot_training_loss(history, x_scale = "linear", y_scale = "linear", save_pat
         x_scale: The scale of the x-axis.
         y_scale: The scale of the y-axis.
     """
-    plt.figure(figsize=(10, 5), dpi = 150)
+    plt.figure(figsize=(10, 5), dpi = 100)
     plt.xscale(x_scale)
     plt.yscale(y_scale)
     if len(history[LOSS_INITIAL]) > 0:
@@ -287,7 +287,7 @@ def plot_training_loss_linlog(history, save_path=None):
             history: The history object returned by the model.fit() method.
             save_path: The path to save the plot to.
     """
-    plt.figure(figsize=(10, 5), dpi = 150)
+    plt.figure(figsize=(12, 5), dpi = 100)
     plt.subplot(1, 2, 1)
     plt.xscale("linear")
     plt.yscale("linear")

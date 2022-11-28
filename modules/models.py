@@ -722,7 +722,24 @@ class AdvectionDiffusionPinn(keras.Model):
     self.v = v
 
   
-  def fit(self, inputs, labels, epochs, optimizer, u_exact = None, progress_interval=500) -> Dict[str, List[float]]:
+  def fit(self, inputs, labels, epochs, optimizer, res_weight = 1.0, bnd_weight = 1.0, u_exact = None, progress_interval=500) -> Dict[str, List[float]]:
+    """
+    Trains the neural network to solve the advection-diffusion equation.
+
+    Args:
+        inputs (tf.Tensor): A tensor containing the spatial coordinates of the points where the residual and boundary conditions are evaluated.
+        labels (tf.Tensor): A tensor containing the boundary conditions.
+        epochs (int): The number of epochs to train the network.
+        optimizer (tf.keras.optimizers.Optimizer): The optimizer to use for training.
+        res_weight (float): The weight to apply to the residual loss. Default is 1.0.
+        bnd_weight (float): The weight to apply to the boundary loss. Default is 1.0.
+        u_exact (tf.Tensor, optional): The exact solution to the advection-diffusion equation. If none, the absolute error will not be calculated. Defaults to None.
+        progress_interval (int, optional): The number of epochs between each print statement. Defaults to 500.
+
+    Returns:
+        Dict[str, List[float]]: A dictionary containing the loss and MAE history.
+
+    """
 
     history = _create_history_dict()
     start_time = time.time()
@@ -732,7 +749,7 @@ class AdvectionDiffusionPinn(keras.Model):
 
         loss_residual = tf.reduce_mean(tf.square(residual))
         loss_boundary = tf.reduce_mean(tf.square(u_bndry - labels[0]))
-        loss = loss_residual + loss_boundary  
+        loss = res_weight * loss_residual + bnd_weight * loss_boundary
       
       grads = tape.gradient(loss, self.trainable_weights)
       optimizer.apply_gradients(zip(grads, self.trainable_weights))
