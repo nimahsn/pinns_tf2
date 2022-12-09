@@ -476,8 +476,8 @@ class SchrodingerPinn(keras.Model):
     self.k = k
 
 
-  def fit(self, inputs, labels, epochs, optimizer, n_boundary_samples, exact_data=None,\
-    progress_interval=500, error_interval=100) -> Dict[str, List[float]]:
+  def fit(self, inputs, labels, epochs, optimizer, n_boundary_samples, w_res=1.0, w_init=1.0, w_bnd=1.0,\
+    exact_data=None, progress_interval=500, error_interval=100) -> Dict[str, List[float]]:
     """
     Train the model with the given inputs and optimizer.
     Args:
@@ -506,7 +506,7 @@ class SchrodingerPinn(keras.Model):
         loss_residual = tf.reduce_mean(tf.abs(residual))
         loss_init = tf.reduce_mean(tf.reduce_sum(tf.square(h_init - labels[0]), axis=1))
         loss_boundary = tf.reduce_mean(tf.reduce_sum(tf.square(h_bndry[:n_boundary_samples//2] - h_bndry[n_boundary_samples//2:]), axis=1)) + tf.reduce_mean(tf.reduce_sum(tf.square(dhb_dx[:n_boundary_samples//2] - dhb_dx[n_boundary_samples//2:]), axis=1))
-        loss = loss_residual + loss_init + loss_boundary
+        loss = w_res * loss_residual + w_init * loss_init + w_bnd * loss_boundary
 
       grads = tape.gradient(loss, self.trainable_weights)
       optimizer.apply_gradients(zip(grads, self.trainable_weights))
