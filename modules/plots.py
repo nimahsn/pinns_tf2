@@ -319,22 +319,27 @@ def plot_pointwise_error(y_true, y_pred, x, figsize = (10, 5), save_path=None):
     plt.show()
 
 
-def plot_pointwise_error_mesh(u_true_flat, u_pred_flat, t_mesh, x_mesh, figsize=(7, 4), dpi=100, colormap = 'viridis', title="", save_path=None):
+def plot_pointwise_error_mesh(u_true_flat, u_pred_flat, t_mesh, x_mesh, cbar_limit=None, figsize=(7, 4), dpi=100, colormap = 'viridis', title="", save_path=None):
     """
     Plot the pointwise error between the true and predicted values.
     Args:
         u_true_flat: The true values. A 1D array.
         u_pred_flat: The predicted values. A 1D array.
-        x_mesh: The x-values. A 2D mesh.
         t_mesh: The t-values. A 2D mesh.
+        x_mesh: The x-values. A 2D mesh.
         figsize: The size of the figure. Default is (7, 4).
+        cb_limit: The limits of the colorbar. Default is None.
         dpi: The resolution of the figure. Default is 100.
+        colormap: The colormap to use. Default is 'viridis'.
         title: The title of the figure. Default is "".
         save_path: The path to save the figure to. Default is None. If None, the figure is not saved.
     """
     plt.figure(figsize=figsize, dpi=dpi)
     plt.pcolormesh(t_mesh, x_mesh, np.abs(u_true_flat - u_pred_flat).reshape(t_mesh.shape), cmap=colormap)
-    plt.colorbar()
+    cbar = plt.colorbar(pad=0.05, aspect=10)
+    cbar.set_label('|h(t,x)|')
+    if cbar_limit is not None:
+        cbar.mappable.set_clim(cbar_limit[0], cbar_limit[1])
     plt.xlabel('t')
     plt.ylabel('x')
     plt.title(title)
