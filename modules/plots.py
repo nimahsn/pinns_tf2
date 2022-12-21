@@ -6,12 +6,11 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
-import plotly.graph_objects as go
 import tensorflow as tf
 from modules.models import LOSS_RESIDUAL, LOSS_BOUNDARY, LOSS_INITIAL, MEAN_ABSOLUTE_ERROR
 
 
-def plot_wave_model(model, x_start, length, time, interactive = False, save_path = None) -> None:
+def plot_wave_model(model, x_start, length, time, save_path = None) -> None:
     """
     Plot the solution of the wave equation for a given model.
     Args:
@@ -19,7 +18,6 @@ def plot_wave_model(model, x_start, length, time, interactive = False, save_path
         x_start (float): Start of the domain.
         length (float): Length of the domain.
         time (float): Time frame of the simulation.
-        interactive (bool, optional): If True, the plot is interactive. Defaults to False.
         save_path (str, optional): Path to save the plot. Defaults to None.
     """
 
@@ -27,56 +25,40 @@ def plot_wave_model(model, x_start, length, time, interactive = False, save_path
     tx = np.stack([t.flatten(), x.flatten()], axis=-1)
     u = model.predict(tx, batch_size=1000)
 
-    if interactive:
-        fig = go.Figure(data=[go.Surface(x = t, y = x, z=u.reshape(t.shape))])
-        fig.update_traces(contours_z=dict(show=True, usecolormap=True,
-                                        highlightcolor="limegreen", project_z=True))
-        fig.update_layout(title='Mave PINN', autosize=True, scene=dict(
-                            xaxis_title='t',
-                            yaxis_title='x',
-                            zaxis_title='y',
-                        ),
-                        scene_camera_eye=dict(x=1.87, y=0.88, z=-0.64),
-                        width=500, height=500,
-                        margin=dict(l=65, r=50, b=65, t=90)
-        )
-        fig.show()
-
-    else:
-        fig = plt.figure(figsize=(30, 90))
-        ax = fig.add_subplot(311, projection='3d')
-        surf = ax.scatter(t, x, np.reshape(u, t.shape), cmap='viridis', alpha=0.6)
-        ax.set_xlabel('t')
-        ax.set_ylabel('x')
-        ax.set_zlabel('u')
-        ax.azim = 5
-        ax.elev = 20
-        # fig.colorbar(surf)
+    fig = plt.figure(figsize=(30, 90))
+    ax = fig.add_subplot(311, projection='3d')
+    surf = ax.scatter(t, x, np.reshape(u, t.shape), cmap='viridis', alpha=0.6)
+    ax.set_xlabel('t')
+    ax.set_ylabel('x')
+    ax.set_zlabel('u')
+    ax.azim = 5
+    ax.elev = 20
+    # fig.colorbar(surf)
 
 
-        ax = fig.add_subplot(312, projection='3d')
-        surf = ax.scatter(t, x, np.reshape(u, t.shape), cmap='viridis', alpha=0.6)
-        ax.set_xlabel('t')
-        ax.set_ylabel('x')
-        ax.set_zlabel('u')
-        ax.azim = 45
-        ax.elev = 20
-        # fig.colorbar(surf)
+    ax = fig.add_subplot(312, projection='3d')
+    surf = ax.scatter(t, x, np.reshape(u, t.shape), cmap='viridis', alpha=0.6)
+    ax.set_xlabel('t')
+    ax.set_ylabel('x')
+    ax.set_zlabel('u')
+    ax.azim = 45
+    ax.elev = 20
+    # fig.colorbar(surf)
 
 
-        ax = fig.add_subplot(313, projection='3d')
-        surf = ax.scatter(t, x, np.reshape(u, t.shape), cmap='viridis', alpha=0.6)
-        ax.azim = 85
-        ax.elev = 20
-        ax.set_xlabel('t')
-        ax.set_ylabel('x')
-        ax.set_zlabel('u')
-        # fig.colorbar(surf)
+    ax = fig.add_subplot(313, projection='3d')
+    surf = ax.scatter(t, x, np.reshape(u, t.shape), cmap='viridis', alpha=0.6)
+    ax.azim = 85
+    ax.elev = 20
+    ax.set_xlabel('t')
+    ax.set_ylabel('x')
+    ax.set_zlabel('u')
+    # fig.colorbar(surf)
 
 
-        if save_path:
-            plt.savefig(save_path)
-        plt.show()
+    if save_path:
+        plt.savefig(save_path)
+    plt.show()
 
 
 def plot_burgers_model(model, save_path = None) -> None:
@@ -165,7 +147,7 @@ def plot_heat_model(model, length, time, save_path = None) -> None:
     plt.show()
 
 
-def plot_schrodinger_model(model, x_start, length, time, save_path = None) -> None:
+def plot_schrodinger_model(model, x_start, length, time, fig_size = (7, 4), dpi = 100, save_path = None) -> None:
     """
     Plot the model predictions for the Schrodinger equation.
     Args:
@@ -183,7 +165,7 @@ def plot_schrodinger_model(model, x_start, length, time, save_path = None) -> No
     u = tf.reshape(u, t.shape)
 
     # plot u(t,x) distribution as a color-map
-    fig = plt.figure(figsize=(7,4))
+    fig = plt.figure(figsize=fig_size, dpi=dpi)
     gs = GridSpec(2, 5)
     plt.subplot(gs[0, :])
     plt.pcolormesh(t, x, u)
@@ -191,7 +173,6 @@ def plot_schrodinger_model(model, x_start, length, time, save_path = None) -> No
     plt.ylabel('x')
     cbar = plt.colorbar(pad=0.05, aspect=10)
     cbar.set_label('|h(t,x)|')
-    cbar.mappable.set_clim(-1, 1)
     # plot u(t=const, x) cross-sections
     t_cross_sections = [0, time/4, time/2, 3*time/4, time]
     for i, t_cs in enumerate(t_cross_sections):
@@ -333,6 +314,30 @@ def plot_pointwise_error(y_true, y_pred, x, figsize = (10, 5), save_path=None):
     plt.plot(x, np.abs(y_true - y_pred))
     plt.xlabel('x')
     plt.ylabel('Absolute error')
+    if save_path is not None:
+        plt.savefig(save_path)
+    plt.show()
+
+
+def plot_pointwise_error_mesh(u_true_flat, u_pred_flat, t_mesh, x_mesh, figsize=(7, 4), dpi=100, colormap = 'viridis', title="", save_path=None):
+    """
+    Plot the pointwise error between the true and predicted values.
+    Args:
+        u_true_flat: The true values. A 1D array.
+        u_pred_flat: The predicted values. A 1D array.
+        x_mesh: The x-values. A 2D mesh.
+        t_mesh: The t-values. A 2D mesh.
+        figsize: The size of the figure. Default is (7, 4).
+        dpi: The resolution of the figure. Default is 100.
+        title: The title of the figure. Default is "".
+        save_path: The path to save the figure to. Default is None. If None, the figure is not saved.
+    """
+    plt.figure(figsize=figsize, dpi=dpi)
+    plt.pcolormesh(t_mesh, x_mesh, np.abs(u_true_flat - u_pred_flat).reshape(t_mesh.shape), cmap=colormap)
+    plt.colorbar()
+    plt.xlabel('t')
+    plt.ylabel('x')
+    plt.title(title)
     if save_path is not None:
         plt.savefig(save_path)
     plt.show()
