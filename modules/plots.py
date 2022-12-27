@@ -245,14 +245,18 @@ def plot_training_loss(history, x_scale = "linear", y_scale = "linear", save_pat
     plt.figure(figsize=(10, 5), dpi = 100)
     plt.xscale(x_scale)
     plt.yscale(y_scale)
-    if len(history[LOSS_INITIAL]) > 0:
-        plt.plot(history[LOSS_INITIAL], label='initial loss', alpha=0.8)
-    if len(history[LOSS_BOUNDARY]) > 0:
-        plt.plot(history[LOSS_BOUNDARY], label='boundary loss', alpha=0.8)
-    if len(history[LOSS_RESIDUAL]) > 0:
-        plt.plot(history[LOSS_RESIDUAL], label='residual loss', alpha=0.8)
-    if len(history[MEAN_ABSOLUTE_ERROR]) > 0:
-        plt.plot(history[MEAN_ABSOLUTE_ERROR], label='mean absolute error', alpha = 0.8)
+    if LOSS_INITIAL in history:
+        if len(history[LOSS_INITIAL]) > 0:
+            plt.plot(history[LOSS_INITIAL], label='initial loss', alpha=0.8)
+    if LOSS_BOUNDARY in history:
+        if len(history[LOSS_BOUNDARY]) > 0:
+            plt.plot(history[LOSS_BOUNDARY], label='boundary loss', alpha=0.8)
+    if LOSS_RESIDUAL in history:
+        if len(history[LOSS_RESIDUAL]) > 0:
+            plt.plot(history[LOSS_RESIDUAL], label='residual loss', alpha=0.8)
+    if MEAN_ABSOLUTE_ERROR in history:
+        if len(history[MEAN_ABSOLUTE_ERROR]) > 0:
+            plt.plot(history[MEAN_ABSOLUTE_ERROR], label='mean absolute error', alpha = 0.8)
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.legend()
@@ -272,28 +276,36 @@ def plot_training_loss_linlog(history, save_path=None):
     plt.subplot(1, 2, 1)
     plt.xscale("linear")
     plt.yscale("linear")
-    if len(history[LOSS_INITIAL]) > 0:
-        plt.plot(history[LOSS_INITIAL], label='initial loss', alpha=0.8)
-    if len(history[LOSS_BOUNDARY]) > 0:
-        plt.plot(history[LOSS_BOUNDARY], label='boundary loss', alpha=0.8)
-    if len(history[LOSS_RESIDUAL]) > 0:
-        plt.plot(history[LOSS_RESIDUAL], label='residual loss', alpha=0.8)
-    if len(history[MEAN_ABSOLUTE_ERROR]) > 0:
-        plt.plot(history[MEAN_ABSOLUTE_ERROR], label='mean absolute error', alpha = 0.8)
+    if LOSS_INITIAL in history:
+        if len(history[LOSS_INITIAL]) > 0:
+            plt.plot(history[LOSS_INITIAL], label='initial loss', alpha=0.8)
+    if LOSS_BOUNDARY in history:
+        if len(history[LOSS_BOUNDARY]) > 0:
+            plt.plot(history[LOSS_BOUNDARY], label='boundary loss', alpha=0.8)
+    if LOSS_RESIDUAL in history:
+        if len(history[LOSS_RESIDUAL]) > 0:
+            plt.plot(history[LOSS_RESIDUAL], label='residual loss', alpha=0.8)
+    if MEAN_ABSOLUTE_ERROR in history:
+        if len(history[MEAN_ABSOLUTE_ERROR]) > 0:
+            plt.plot(history[MEAN_ABSOLUTE_ERROR], label='mean absolute error', alpha = 0.8)
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.legend()
     plt.subplot(1, 2, 2)
     plt.xscale("linear")
     plt.yscale("log")
-    if len(history[LOSS_INITIAL]) > 0:
-        plt.plot(history[LOSS_INITIAL], label='initial loss', alpha=0.8)
-    if len(history[LOSS_BOUNDARY]) > 0:
-        plt.plot(history[LOSS_BOUNDARY], label='boundary loss', alpha=0.8)
-    if len(history[LOSS_RESIDUAL]) > 0:
-        plt.plot(history[LOSS_RESIDUAL], label='residual loss', alpha=0.8)
-    if len(history[MEAN_ABSOLUTE_ERROR]) > 0:
-        plt.plot(history[MEAN_ABSOLUTE_ERROR], label='mean absolute error', alpha = 0.8)
+    if LOSS_INITIAL in history:
+        if len(history[LOSS_INITIAL]) > 0:
+            plt.plot(history[LOSS_INITIAL], label='initial loss', alpha=0.8)
+    if LOSS_BOUNDARY in history:
+        if len(history[LOSS_BOUNDARY]) > 0:
+            plt.plot(history[LOSS_BOUNDARY], label='boundary loss', alpha=0.8)
+    if LOSS_RESIDUAL in history:
+        if len(history[LOSS_RESIDUAL]) > 0:
+            plt.plot(history[LOSS_RESIDUAL], label='residual loss', alpha=0.8)
+    if MEAN_ABSOLUTE_ERROR in history:
+        if len(history[MEAN_ABSOLUTE_ERROR]) > 0:
+            plt.plot(history[MEAN_ABSOLUTE_ERROR], label='mean absolute error', alpha = 0.8)
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.legend()
