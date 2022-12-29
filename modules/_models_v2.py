@@ -273,3 +273,161 @@ class PoissonPinn(tf.keras.Model):
         '''
         return [self.loss_boundary_tracker, self.loss_residual_tracker, self.mae_tracker]
 
+
+class SchrodingerPinn(tf.keras.Model):
+    """
+    A PINN for the Schrodinger's equation.
+    
+    Attributes:
+        backbone: The backbone model.
+        k: The planck constant.
+        loss_boundary_tracker: The boundary loss tracker.
+        loss_initial_tracker: The initial loss tracker.
+        loss_residual_tracker: The residual loss tracker.
+        mae_tracker: The mean absolute error tracker.
+        _loss_residual_weight: The weight of the residual loss.
+        _loss_initial_weight: The weight of the initial loss.
+        _loss_boundary_weight: The weight of the boundary loss.
+    """
+    
+    def __init__(self, backbone, k: float = 0.5, loss_residual_weight: float = 1.0, loss_initial_weight: float = 1.0, \
+        loss_boundary_weight: float = 1.0, **kwargs):
+        """
+        Initializes the model.
+
+        Args:
+            backbone: The backbone model.
+            k: The planck constant.
+            loss_residual_weight: The weight of the residual loss.
+            loss_initial_weight: The weight of the initial loss.
+            loss_boundary_weight: The weight of the boundary loss.
+            **kwargs: Additional arguments to pass to the Model constructor.
+        """
+        super().__init__(**kwargs)
+        self.backbone = backbone
+        self.k = k
+        self.loss_boundary_tracker = tf.keras.metrics.Mean(name=LOSS_BOUNDARY)
+        self.loss_initial_tracker = tf.keras.metrics.Mean(name=LOSS_INITIAL)
+        self.loss_residual_tracker = tf.keras.metrics.Mean(name=LOSS_RESIDUAL)
+        self.mae_tracker = tf.keras.metrics.MeanAbsoluteError(name=MEAN_ABSOLUTE_ERROR)
+        self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight")
+        self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, name="loss_boundary_weight")
+        self._loss_initial_weight = tf.Variable(loss_initial_weight, trainable=False, name="loss_initial_weight")
+
+
+    def set_loss_weights(self, loss_residual_weight: float, loss_initial_weight: float, loss_boundary_weight: float):
+        """
+        Sets the loss weights.
+
+        Args:
+            loss_residual_weight: The weight of the residual loss.
+            loss_initial_weight: The weight of the initial loss.
+            loss_boundary_weight: The weight of the boundary loss.
+        """
+        self._loss_residual_weight.assign(loss_residual_weight)
+        self._loss_boundary_weight.assign(loss_boundary_weight)
+        self._loss_initial_weight.assign(loss_initial_weight)
+
+    @tf.function
+    def call(self, inputs, training=False):
+        """
+        Calls the model on the inputs.
+
+        Args:
+            inputs: The inputs to the model. First input is the samples, second input is the initial, third input is the boundary start, \
+                fourth input is the boundary end.
+            training: Whether or not the model is being called in training mode.
+
+        Returns:
+            The output of the model. First output is the solution for residual samples, second is the lhs residual, \
+                third is solution for initial samples, fourth is solution for boundary samples, and fifth is dh/dx for boundary samples.
+        """
+        inputs_residuals = inputs[0]
+        inputs_initial = inputs[1]
+        inputs_bnd_start = inputs[2]
+        inputs_bnd_end = inputs[3]
+
+        with tf.GradientTape(watch_accessed_variables=False) as tape2:
+            tape2.watch(inputs_residuals)
+            with tf.GradientTape(watch_accessed_variables=False) as tape1:
+                tape1.watch(inputs_residuals)
+                h_samples = self.backbone(inputs_residuals, training=training)
+            
+            first_order = tape1.batch_jacobian(h_samples, inputs_residuals) # output is n_sample x 2 * 2
+            dh_dt = first_order[:, :, 0]
+            dh_dx = first_order[:, :, 1]
+        d2h_dx2 = tape2.batch_jacobian(dh_dx, inputs_residuals)[:, :, 1]
+
+        norm2_h = h_samples[:, 0:1] ** 2 + h_samples[:, 1:2] ** 2
+        real_residual = -h_samples[:, 1:2] + self.k * d2h_dx2[:, 0:1] + norm2_h * h_samples[:, 0:1]
+        imag_residual = h_samples[:, 0:1] + self.k * d2h_dx2[:, 1:2] + norm2_h * h_samples[:, 1:2]
+
+        lhs_samples = tf.concat([real_residual, imag_residual], axis=1)
+
+        h_initial = self.backbone(inputs_initial, training=training)
+
+        inputs_bnd = tf.concat([inputs_bnd_start, inputs_bnd_end], axis=0)
+
+        with tf.GradientTape(watch_accessed_variables=False) as tape:
+            tape.watch(inputs_bnd)
+            h_bnd = self.backbone(inputs_bnd, training=training)
+        dh_dx_bnd = tape.batch_jacobian(h_bnd, inputs_bnd)[:, :, 1]
+
+        h_bnd_start = h_bnd[0:inputs_bnd_start.shape[0]]
+        h_bnd_end = h_bnd[inputs_bnd_start.shape[0]:]
+        dh_dx_start = dh_dx_bnd[0:inputs_bnd_start.shape[0]]
+        dh_dx_end = dh_dx_bnd[inputs_bnd_start.shape[0]:]
+
+        return h_samples, lhs_samples, h_initial, h_bnd_start, h_bnd_end, dh_dx_start, dh_dx_end
+
+    @tf.function
+    def train_step(self, data):
+        """
+        Performs a training step.
+
+        Args:
+            data: The data to train on. First input is the samples, second input is the initial, third input is the boundary. \
+                First output is the solution for residual samples, second is the lhs residual, third is solution for initial samples. \
+                    The boundary samples must have 3 columns, where the first column is the t value, the second column is the x value for the start \
+                        of the boundary, and the third column is the x value for the end of the boundary.
+
+        Returns:
+            The loss of the step.
+        """
+        inputs, outputs = data
+        tx_samples, tx_initial, txx_bnd = inputs
+        tx_bnd_start = tf.concat([txx_bnd[:, 0:1], txx_bnd[:, 1:2]], axis=1)
+        tx_bnd_end = tf.concat([txx_bnd[:, 0:1], txx_bnd[:, 2:3]], axis=1)
+        h_samples_exact, rhs_samples_exact, h_initial_exact = outputs
+
+        with tf.GradientTape() as tape:
+            h_samples, lhs_samples, h_initial, h_bnd_start, h_bnd_end, dh_dx_start, dh_dx_end = \
+                self([tx_samples, tx_initial, tx_bnd_start, tx_bnd_end], training=True)
+
+            loss_residual = tf.reduce_mean(tf.square(lhs_samples - rhs_samples_exact))
+            loss_initial = tf.reduce_mean(tf.square(h_initial - h_initial_exact))
+            loss_boundary_h = tf.reduce_mean(tf.square(h_bnd_start - h_bnd_end))
+            loss_boundary_dh_dx = tf.reduce_mean(tf.square(dh_dx_start - dh_dx_end))
+            loss_boundary = loss_boundary_h + loss_boundary_dh_dx
+
+            loss = self._loss_residual_weight * loss_residual + self._loss_initial_weight * loss_initial + \
+                self._loss_boundary_weight * loss_boundary
+
+        gradients = tape.gradient(loss, self.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+
+        self.loss_residual_tracker.update_state(loss_residual)
+        self.loss_initial_tracker.update_state(loss_initial)
+        self.loss_boundary_tracker.update_state(loss_boundary)
+        self.mae_tracker.update_state(h_samples_exact, h_samples)
+
+        return {m.name: m.result() for m in self.metrics}
+
+    @property
+    def metrics(self):
+        """
+        Returns the metrics of the model.
+        """
+        return [self.loss_residual_tracker, self.loss_initial_tracker, self.loss_boundary_tracker, self.mae_tracker]
+
+

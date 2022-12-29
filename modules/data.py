@@ -236,3 +236,30 @@ def simulate_advection(n_samples, boundary_function: Callable = None, x_start: f
     u_boundary = boundary_function(x_boundary)
 
     return (x_eqn, f_eqn), (x_boundary, u_boundary)
+
+
+def simulate_schrodinger_v2(n_samples, init_function, x_start, length, time, random_seed = 42, dtype = tf.float32):
+
+    r = np.random.RandomState(random_seed)
+    
+    t = r.uniform(0, time, (n_samples, 1))
+    x = r.uniform(x_start, x_start + length, (n_samples, 1))
+    tx_eqn = np.concatenate((t, x), axis = 1)
+
+    t_init = np.zeros((n_samples, 1))
+    x_init = r.uniform(x_start, x_start + length, (n_samples, 1))
+    tx_init = np.concatenate((t_init, x_init), axis = 1)
+
+    t_boundary = r.uniform(0, time, (n_samples, 1))
+    x_boundary_start = np.ones((n_samples, 1)) * x_start
+    x_boundary_end = np.ones((n_samples, 1)) * (x_start + length)
+    txx_boundary = np.concatenate([t_boundary, x_boundary_start, x_boundary_end], axis = 1)
+
+    tx_eqn = tf.convert_to_tensor(tx_eqn, dtype = dtype)
+    tx_init = tf.convert_to_tensor(tx_init, dtype = dtype)
+    txx_boundary = tf.convert_to_tensor(txx_boundary, dtype = dtype)
+
+    y_eqn = tf.zeros((n_samples, 2), dtype = dtype)
+    y_init = init_function(tx_init)
+
+    return (tx_eqn, y_eqn), (tx_init, y_init), txx_boundary
