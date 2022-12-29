@@ -359,8 +359,8 @@ class SchrodingerPinn(tf.keras.Model):
         d2h_dx2 = tape2.batch_jacobian(dh_dx, inputs_residuals)[:, :, 1]
 
         norm2_h = h_samples[:, 0:1] ** 2 + h_samples[:, 1:2] ** 2
-        real_residual = -h_samples[:, 1:2] + self.k * d2h_dx2[:, 0:1] + norm2_h * h_samples[:, 0:1]
-        imag_residual = h_samples[:, 0:1] + self.k * d2h_dx2[:, 1:2] + norm2_h * h_samples[:, 1:2]
+        real_residual = -dh_dt[:, 1:2] + self.k * d2h_dx2[:, 0:1] + norm2_h * h_samples[:, 0:1]
+        imag_residual = dh_dt[:, 0:1] + self.k * d2h_dx2[:, 1:2] + norm2_h * h_samples[:, 1:2]
 
         lhs_samples = tf.concat([real_residual, imag_residual], axis=1)
 
