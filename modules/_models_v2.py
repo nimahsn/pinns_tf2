@@ -334,8 +334,8 @@ class SchrodingerPinn(tf.keras.Model):
         Calls the model on the inputs.
 
         Args:
-            inputs: The inputs to the model. First input is the samples, second input is the initial, third input is the boundary start, \
-                fourth input is the boundary end.
+            inputs: The inputs to the model. First input is the samples, second input is the initial, \
+                third input is the boundary start, fourth input is the boundary end.
             training: Whether or not the model is being called in training mode.
 
         Returns:
@@ -431,3 +431,115 @@ class SchrodingerPinn(tf.keras.Model):
         return [self.loss_residual_tracker, self.loss_initial_tracker, self.loss_boundary_tracker, self.mae_tracker]
 
 
+class BurgersEquation(tf.keras.Model):
+    """
+    A model that solves the Burgers' equation.
+    """
+    def __init__(self, backbone, nu: float, loss_residual_weight=1.0, loss_initial_weight=1.0, loss_boundary_weight=1.0):
+        """
+        Initializes the model.
+
+        Args:
+            backbone: The backbone model.
+            nu: The viscosity of the fluid.
+            loss_residual_weight: The weight of the residual loss.
+            loss_initial_weight: The weight of the initial loss.
+            loss_boundary_weight: The weight of the boundary loss.
+        """
+        super(BurgersEquation, self).__init__()
+
+        self.backbone = backbone
+        self.nu = nu
+
+        self._loss_residual_weight = loss_residual_weight
+        self._loss_initial_weight = loss_initial_weight
+        self._loss_boundary_weight = loss_boundary_weight
+
+        self.loss_residual_tracker = tf.keras.metrics.Mean(name=LOSS_RESIDUAL)
+        self.loss_initial_tracker = tf.keras.metrics.Mean(name=LOSS_INITIAL)
+        self.loss_boundary_tracker = tf.keras.metrics.Mean(name=LOSS_BOUNDARY)
+        self.mae_tracker = tf.keras.metrics.MeanAbsoluteError(name=MEAN_ABSOLUTE_ERROR)
+
+    @tf.function
+    def call(self, inputs, training=False):
+        """
+        Performs a forward pass.
+
+        Args:
+            inputs: The inputs to the model. First input is the samples, second input is the initial, \
+                and third input is the boundary data.
+            training: Whether or not the model is training.
+
+        Returns:
+            The solution for the residual samples, the lhs residual, the solution for the initial samples, \
+                and the solution for the boundary samples.
+        """
+        
+        tx_samples = inputs[0]
+        tx_init = inputs[1]
+        tx_bnd = inputs[2]
+
+        with tf.GradientTape(watch_accessed_variables=False) as tape2:
+            tape2.watch(tx_samples)
+            
+            with tf.GradientTape(watch_accessed_variables=False) as tape1:
+                tape1.watch(tx_samples)
+                u_samples = self.backbone(tx_samples, training=training)
+
+            first_order = tape1.batch_jacobian(u_samples, tx_samples)
+            du_dt = first_order[..., 0]
+            du_dx = first_order[..., 1]
+
+        d2u_dx2 = tape2.batch_jacobian(du_dx, tx_samples)[..., 1]
+
+        lhs_samples = du_dt + u_samples * du_dx - self.nu * d2u_dx2
+        tx_ib = tf.concat([tx_init, tx_bnd], axis=0)
+        u_ib = self.backbone(tx_ib, training=training)
+        u_initial = u_ib[:tx_init.shape[0]]
+        u_bnd = u_ib[tx_init.shape[0]:]
+
+        return u_samples, lhs_samples, u_initial, u_bnd
+
+    @tf.function
+    def train_step(self, data):
+        """
+        Performs a training step.
+
+        Args:
+            data: The data to train on. First input is the samples, second input is the initial, \
+                and third input is the boundary data. First output is the exact solution for the samples, \
+                second output is the exact rhs for the samples, third output is the exact solution for the initial, \
+                and fourth output is the exact solution for the boundary.
+
+        Returns:
+            The metrics for the training step.
+        """
+
+        inputs, outputs = data
+        u_samples_exact, rhs_samples_exact, u_initial_exact, u_bnd_exact = outputs
+
+        with tf.GradientTape() as tape:
+            u_samples, lhs_samples, u_initial, u_bnd = self(inputs, training=True)
+
+            loss_residual = tf.reduce_mean(tf.square(lhs_samples - rhs_samples_exact))
+            loss_initial = tf.reduce_mean(tf.square(u_initial - u_initial_exact))
+            loss_boundary = tf.reduce_mean(tf.square(u_bnd - u_bnd_exact))
+            loss = self._loss_residual_weight * loss_residual + self._loss_initial_weight * loss_initial + \
+                self._loss_boundary_weight * loss_boundary
+
+        gradients = tape.gradient(loss, self.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+
+        self.mae_tracker.update_state(u_samples_exact, u_samples)
+        self.loss_residual_tracker.update_state(loss_residual)
+        self.loss_initial_tracker.update_state(loss_initial)
+        self.loss_boundary_tracker.update_state(loss_boundary)
+
+        return {m.name: m.result() for m in self.metrics}
+
+    @property
+    def metrics(self):
+        """
+        Returns the metrics of the model.
+        """
+        return [self.loss_residual_tracker, self.loss_initial_tracker, self.loss_boundary_tracker, self.mae_tracker]

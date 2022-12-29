@@ -87,7 +87,6 @@ def plot_burgers_model(model, save_path = None) -> None:
     plt.ylabel('x')
     cbar = plt.colorbar(pad=0.05, aspect=10)
     cbar.set_label('u(t,x)')
-    cbar.mappable.set_clim(-1, 1)
     # plot u(t=const, x) cross-sections
     t_cross_sections = [0,0.25, 0.5,0.75,1]
     for i, t_cs in enumerate(t_cross_sections):

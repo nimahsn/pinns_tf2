@@ -25,7 +25,7 @@ def simulate_burgers(n_samples, init_function = None, boundary_function = None, 
 
     if init_function is None:
         def init_function(tx):
-            return tf.sin(np.pi*tx[:, 1:])
+            return -tf.sin(np.pi*tx[:, 1:])
 
     if boundary_function is None:
         def boundary_function(tx):
