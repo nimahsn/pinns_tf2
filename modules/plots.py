@@ -10,6 +10,25 @@ import tensorflow as tf
 from modules.models import LOSS_RESIDUAL, LOSS_BOUNDARY, LOSS_INITIAL, MEAN_ABSOLUTE_ERROR
 
 
+def plot_wave_at_x(model, x, time, save_path = None) -> None:
+    """
+    Plot the solution of the wave equation for a given model at a given x coordinate.
+    Args:
+        model (tf.keras.Model): Model that predicts the solution of the wave equation.
+        x (float): x coordinate of the plot.
+        time (float): Time frame of the simulation.
+        save_path (str, optional): Path to save the plot. Defaults to None.
+    """
+    t = np.linspace(0, time, 100)
+    u = model.predict(np.stack([t, np.full(t.shape, x)], axis=-1), batch_size=1000)
+    plt.plot(t, u)
+    plt.xlabel('t')
+    plt.ylabel('u')
+    if save_path:
+        plt.savefig(save_path)
+    plt.show()
+
+
 def plot_wave_model(model, x_start, length, time, save_path = None) -> None:
     """
     Plot the solution of the wave equation for a given model.
