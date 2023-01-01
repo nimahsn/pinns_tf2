@@ -4,18 +4,18 @@ In the future, this will be the main model file.
 This implementation will try to use the tf.keras API as much as possible and fix optimization issues with the current implementation.
 '''
 
-from typing import Tuple, List
+from typing import Tuple, List, Union
 import tensorflow as tf
 import numpy as np
 from modules.utils import LOSS_BOUNDARY, LOSS_INITIAL, LOSS_RESIDUAL, MEAN_ABSOLUTE_ERROR
 
-def create_dense_model(layers: List[int], activation: "tf.keras.activations.Activation", \
+def create_dense_model(layers: List[Union[int, "tf.keras.layers.Layer"]], activation: "tf.keras.activations.Activation", \
     initializer: "tf.keras.initializers.Initializer", n_inputs: int, n_outputs: int, **kwargs) -> "tf.keras.Model":
     """
     Creates a dense model with the given layers, activation, and input and output sizes.
 
     Args:
-        layers: The sizes of the hidden layers.
+        layers: The layers to use. Elements can be either an integer or a Layer instance. If an integer, a Dense layer with that many units will be used.
         activation: The activation function to use.
         initializer: The initializer to use.
         n_inputs: The number of inputs.
@@ -28,7 +28,10 @@ def create_dense_model(layers: List[int], activation: "tf.keras.activations.Acti
     inputs = tf.keras.Input(shape=(n_inputs,))
     x = inputs
     for layer in layers:
-        x = tf.keras.layers.Dense(layer, activation=activation, kernel_initializer=initializer)(x)
+        if isinstance(layer, int):
+            x = tf.keras.layers.Dense(layer, activation=activation, kernel_initializer=initializer)(x)
+        else:
+            x = layer(x)
     outputs = tf.keras.layers.Dense(n_outputs, kernel_initializer=initializer)(x)
     return tf.keras.Model(inputs=inputs, outputs=outputs, **kwargs)
 
