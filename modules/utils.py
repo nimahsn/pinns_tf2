@@ -37,11 +37,11 @@ def save_history_csv(history, id, directory):
     path = os.path.join(log_directory, name)
     resid_loss = history[LOSS_RESIDUAL]
     df = pd.DataFrame(np.array(resid_loss), columns = [LOSS_RESIDUAL])
-    if len(history[LOSS_INITIAL]) > 0:
+    if LOSS_INITIAL in history and len(history[LOSS_INITIAL]) > 0:
         df[LOSS_INITIAL] = np.array(history[LOSS_INITIAL])
-    if len(history[LOSS_BOUNDARY]) > 0:
+    if LOSS_BOUNDARY in history and len(history[LOSS_BOUNDARY]) > 0:
         df[LOSS_BOUNDARY] = np.array(history[LOSS_BOUNDARY])
-    if len(history[MEAN_ABSOLUTE_ERROR]) > 0:
+    if MEAN_ABSOLUTE_ERROR in history and len(history[MEAN_ABSOLUTE_ERROR]) > 0:
         df[MEAN_ABSOLUTE_ERROR] = np.array(history[MEAN_ABSOLUTE_ERROR])
     df.to_csv(path)
 
