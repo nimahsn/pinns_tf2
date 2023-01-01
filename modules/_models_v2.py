@@ -245,14 +245,15 @@ class PoissonPinn(tf.keras.Model):
         Returns:
             The loss.
         """
-        x, y = data
+        inputs, outputs = data
+        u_exact, rhs_exact, u_bnd_exact = outputs
 
         # compute residual loss with samples
         with tf.GradientTape() as tape:
-            u_samples, lhs_samples, u_bnd = self(x, training=True)
-            loss_residual = tf.losses.mean_squared_error(y[1], lhs_samples)
-            loss_boundary = tf.losses.mean_squared_error(y[2], u_bnd)
-            loss = loss_residual + loss_boundary
+            u_samples, lhs_samples, u_bnd = self(inputs, training=True)
+            loss_residual = tf.reduce_mean(tf.square(lhs_samples - rhs_exact))
+            loss_boundary = tf.reduce_mean(tf.square(u_bnd - u_bnd_exact))
+            loss = self._loss_residual_weight * loss_residual + self._loss_boundary_weight * loss_boundary
 
         trainable_vars = self.trainable_variables
         gradients = tape.gradient(loss, trainable_vars)
@@ -260,8 +261,7 @@ class PoissonPinn(tf.keras.Model):
 
         self.loss_residual_tracker.update_state(loss_residual)
         self.loss_boundary_tracker.update_state(loss_boundary)
-        self.mae_tracker.update_state(y[0], u_samples)
-
+        self.mae_tracker.update_state(u_exact, u_samples)
 
         return {m.name: m.result() for m in self.metrics}
 
