@@ -71,8 +71,8 @@ class AdvectionPinn(tf.keras.Model):
         self.loss_boundary_tracker = tf.keras.metrics.Mean(name=LOSS_BOUNDARY)
         self.loss_residual_tracker = tf.keras.metrics.Mean(name=LOSS_RESIDUAL)
         self.mae_tracker = tf.keras.metrics.MeanAbsoluteError(name=MEAN_ABSOLUTE_ERROR)
-        self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight")
-        self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, name="loss_boundary_weight")
+        self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight", dtype=tf.keras.backend.floatx())
+        self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, name="loss_boundary_weight", dtype=tf.keras.backend.floatx())
 
 
     def set_loss_weights(self, loss_residual_weight: float, loss_boundary_weight: float):
@@ -188,8 +188,8 @@ class PoissonPinn(tf.keras.Model):
         self.loss_boundary_tracker = tf.keras.metrics.Mean(name=LOSS_BOUNDARY)
         self.loss_residual_tracker = tf.keras.metrics.Mean(name=LOSS_RESIDUAL)
         self.mae_tracker = tf.keras.metrics.MeanAbsoluteError(name=MEAN_ABSOLUTE_ERROR)
-        self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight")
-        self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, name="loss_boundary_weight")
+        self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight", dtype=tf.keras.backend.floatx())
+        self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, name="loss_boundary_weight", dtype=tf.keras.backend.floatx())
 
     def set_loss_weights(self, loss_residual_weight: float, loss_boundary_weight: float):
         """
@@ -254,8 +254,8 @@ class PoissonPinn(tf.keras.Model):
         # compute residual loss with samples
         with tf.GradientTape() as tape:
             u_samples, lhs_samples, u_bnd = self(inputs, training=True)
-            loss_residual = tf.reduce_mean(tf.square(lhs_samples - rhs_exact))
-            loss_boundary = tf.reduce_mean(tf.square(u_bnd - u_bnd_exact))
+            loss_residual = tf.losses.mean_squared_error(rhs_exact, lhs_samples)
+            loss_boundary = tf.losses.mean_squared_error(u_bnd_exact, u_bnd)
             loss = self._loss_residual_weight * loss_residual + self._loss_boundary_weight * loss_boundary
 
         trainable_vars = self.trainable_variables
@@ -313,9 +313,9 @@ class SchrodingerPinn(tf.keras.Model):
         self.loss_initial_tracker = tf.keras.metrics.Mean(name=LOSS_INITIAL)
         self.loss_residual_tracker = tf.keras.metrics.Mean(name=LOSS_RESIDUAL)
         self.mae_tracker = tf.keras.metrics.MeanAbsoluteError(name=MEAN_ABSOLUTE_ERROR)
-        self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight")
-        self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, name="loss_boundary_weight")
-        self._loss_initial_weight = tf.Variable(loss_initial_weight, trainable=False, name="loss_initial_weight")
+        self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight", dtype=tf.keras.backend.floatx())
+        self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, name="loss_boundary_weight", dtype=tf.keras.backend.floatx())
+        self._loss_initial_weight = tf.Variable(loss_initial_weight, trainable=False, name="loss_initial_weight", dtype=tf.keras.backend.floatx())
 
 
     def set_loss_weights(self, loss_residual_weight: float, loss_initial_weight: float, loss_boundary_weight: float):
@@ -407,12 +407,11 @@ class SchrodingerPinn(tf.keras.Model):
             h_samples, lhs_samples, h_initial, h_bnd_start, h_bnd_end, dh_dx_start, dh_dx_end = \
                 self([tx_samples, tx_initial, tx_bnd_start, tx_bnd_end], training=True)
 
-            loss_residual = tf.reduce_mean(tf.square(lhs_samples - rhs_samples_exact))
-            loss_initial = tf.reduce_mean(tf.square(h_initial - h_initial_exact))
-            loss_boundary_h = tf.reduce_mean(tf.square(h_bnd_start - h_bnd_end))
-            loss_boundary_dh_dx = tf.reduce_mean(tf.square(dh_dx_start - dh_dx_end))
+            loss_residual = tf.losses.mean_squared_error(rhs_samples_exact, lhs_samples)
+            loss_initial = tf.losses.mean_squared_error(h_initial_exact, h_initial)
+            loss_boundary_h = tf.losses.mean_squared_error(h_bnd_start, h_bnd_end)
+            loss_boundary_dh_dx = tf.losses.mean_squared_error(dh_dx_start, dh_dx_end)
             loss_boundary = loss_boundary_h + loss_boundary_dh_dx
-
             loss = self._loss_residual_weight * loss_residual + self._loss_initial_weight * loss_initial + \
                 self._loss_boundary_weight * loss_boundary
 
@@ -434,7 +433,7 @@ class SchrodingerPinn(tf.keras.Model):
         return [self.loss_residual_tracker, self.loss_initial_tracker, self.loss_boundary_tracker, self.mae_tracker]
 
 
-class BurgersEquation(tf.keras.Model):
+class BurgersPinn(tf.keras.Model):
     """
     A model that solves the Burgers' equation.
     """
@@ -451,7 +450,7 @@ class BurgersEquation(tf.keras.Model):
             loss_boundary_weight: The weight of the boundary loss.
             **kwargs: Additional arguments.
         """
-        super(BurgersEquation, self).__init__(**kwargs)
+        super(BurgersPinn, self).__init__(**kwargs)
 
         self.backbone = backbone
         self.nu = nu
@@ -459,9 +458,9 @@ class BurgersEquation(tf.keras.Model):
         self.loss_initial_tracker = tf.keras.metrics.Mean(name=LOSS_INITIAL)
         self.loss_boundary_tracker = tf.keras.metrics.Mean(name=LOSS_BOUNDARY)
         self.mae_tracker = tf.keras.metrics.MeanAbsoluteError(name=MEAN_ABSOLUTE_ERROR)
-        self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight")
-        self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, name="loss_boundary_weight")
-        self._loss_initial_weight = tf.Variable(loss_initial_weight, trainable=False, name="loss_initial_weight")
+        self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight", dtype=tf.keras.backend.floatx())
+        self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, name="loss_boundary_weight", dtype=tf.keras.backend.floatx())
+        self._loss_initial_weight = tf.Variable(loss_initial_weight, trainable=False, name="loss_initial_weight", dtype=tf.keras.backend.floatx())
 
 
     def set_loss_weights(self, loss_residual_weight: float, loss_initial_weight: float, loss_boundary_weight: float):
@@ -538,9 +537,9 @@ class BurgersEquation(tf.keras.Model):
         with tf.GradientTape() as tape:
             u_samples, lhs_samples, u_initial, u_bnd = self(inputs, training=True)
 
-            loss_residual = tf.reduce_mean(tf.square(lhs_samples - rhs_samples_exact))
-            loss_initial = tf.reduce_mean(tf.square(u_initial - u_initial_exact))
-            loss_boundary = tf.reduce_mean(tf.square(u_bnd - u_bnd_exact))
+            loss_residual = tf.losses.mean_squared_error(rhs_samples_exact, lhs_samples)
+            loss_initial = tf.losses.mean_squared_error(u_initial_exact, u_initial)
+            loss_boundary = tf.losses.mean_squared_error(u_bnd_exact, u_bnd)
             loss = self._loss_residual_weight * loss_residual + self._loss_initial_weight * loss_initial + \
                 self._loss_boundary_weight * loss_boundary
 
@@ -587,9 +586,9 @@ class HeatPinn(tf.keras.Model):
         self.loss_initial_tracker = tf.keras.metrics.Mean(name=LOSS_INITIAL)
         self.loss_boundary_tracker = tf.keras.metrics.Mean(name=LOSS_BOUNDARY)
         self.mae_tracker = tf.keras.metrics.MeanAbsoluteError(name=MEAN_ABSOLUTE_ERROR)
-        self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight")
-        self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, name="loss_boundary_weight")
-        self._loss_initial_weight = tf.Variable(loss_initial_weight, trainable=False, name="loss_initial_weight")
+        self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight", dtype=tf.keras.backend.floatx())
+        self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, name="loss_boundary_weight", dtype=tf.keras.backend.floatx())
+        self._loss_initial_weight = tf.Variable(loss_initial_weight, trainable=False, name="loss_initial_weight", dtype=tf.keras.backend.floatx())
 
 
     def set_loss_weights(self, loss_residual_weight: float, loss_initial_weight: float, loss_boundary_weight: float):
@@ -663,9 +662,9 @@ class HeatPinn(tf.keras.Model):
         with tf.GradientTape() as tape:
             u_samples, lhs_samples, u_initial, u_bnd = self(inputs, training=True)
 
-            loss_residual = tf.reduce_mean(tf.square(lhs_samples - rhs_samples_exact))
-            loss_initial = tf.reduce_mean(tf.square(u_initial - u_initial_exact))
-            loss_boundary = tf.reduce_mean(tf.square(u_bnd - u_bnd_exact))
+            loss_residual = tf.losses.mean_squared_error(rhs_samples_exact, lhs_samples)
+            loss_initial = tf.losses.mean_squared_error(u_initial_exact, u_initial)
+            loss_boundary = tf.losses.mean_squared_error(u_bnd_exact, u_bnd)
             loss = self._loss_residual_weight * loss_residual + self._loss_initial_weight * loss_initial + \
                 self._loss_boundary_weight * loss_boundary
 
@@ -711,9 +710,9 @@ class WavePinn(tf.keras.Model):
         self.loss_initial_tracker = tf.keras.metrics.Mean(name=LOSS_INITIAL)
         self.loss_boundary_tracker = tf.keras.metrics.Mean(name=LOSS_BOUNDARY)
         self.mae_tracker = tf.keras.metrics.MeanAbsoluteError(name=MEAN_ABSOLUTE_ERROR)
-        self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight")
-        self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, name="loss_boundary_weight")
-        self._loss_initial_weight = tf.Variable(loss_initial_weight, trainable=False, name="loss_initial_weight")
+        self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight", dtype=tf.keras.backend.floatx())
+        self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, name="loss_boundary_weight", dtype=tf.keras.backend.floatx())
+        self._loss_initial_weight = tf.Variable(loss_initial_weight, trainable=False, name="loss_initial_weight", dtype=tf.keras.backend.floatx())
 
     def set_loss_weights(self, loss_residual_weight: float, loss_initial_weight: float, loss_boundary_weight: float):
         """
@@ -787,11 +786,11 @@ class WavePinn(tf.keras.Model):
         with tf.GradientTape() as tape:
             u_samples, lhs_samples, u_initial, du_dt_init, u_bnd = self(inputs, training=True)
 
-            loss_residual = tf.reduce_mean(tf.square(lhs_samples - rhs_samples_exact))
-            loss_initial_neumann = tf.reduce_mean(tf.square(du_dt_init - du_dt_init_exact))
-            loss_initial_dirichlet = tf.reduce_mean(tf.square(u_initial - u_initial_exact))
+            loss_residual = tf.losses.mean_squared_error(rhs_samples_exact, lhs_samples)
+            loss_initial_neumann = tf.losses.mean_squared_error(du_dt_init_exact, du_dt_init)
+            loss_initial_dirichlet = tf.losses.mean_squared_error(u_initial_exact, u_initial)
             loss_initial = loss_initial_neumann + loss_initial_dirichlet
-            loss_boundary = tf.reduce_mean(tf.square(u_bnd - u_bnd_exact))
+            loss_boundary = tf.losses.mean_squared_error(u_bnd_exact, u_bnd)
             loss = self._loss_residual_weight * loss_residual + self._loss_initial_weight * loss_initial + \
                 self._loss_boundary_weight * loss_boundary
 
@@ -811,5 +810,4 @@ class WavePinn(tf.keras.Model):
         Returns the metrics of the model.
         """
         return [self.loss_residual_tracker, self.loss_initial_tracker, self.loss_boundary_tracker, self.mae_tracker]
-
 
