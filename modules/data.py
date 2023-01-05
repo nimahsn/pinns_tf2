@@ -149,33 +149,6 @@ def simulate_heat(n_samples, phi_function, boundary_function, length, time, rand
     return (tx_eqn, y_eqn), (tx_init, y_phi), (tx_boundary, y_boundary)
 
 
-def simulate_schrodinger(n_samples, init_function, x_start, length, time, random_seed = 42, dtype = tf.float32):
-
-    r = np.random.RandomState(random_seed)
-    
-    t = r.uniform(0, time, (n_samples, 1))
-    x = r.uniform(x_start, x_start + length, (n_samples, 1))
-    tx_eqn = np.concatenate((t, x), axis = 1)
-
-    t_init = np.zeros((n_samples, 1))
-    x_init = r.uniform(x_start, x_start + length, (n_samples, 1))
-    tx_init = np.concatenate((t_init, x_init), axis = 1)
-
-    t_boundary = r.uniform(0, time, (n_samples, 1))
-    x_boundary = np.ones((n_samples//2, 1))*x_start
-    x_boundary = np.append(x_boundary, np.ones((n_samples - n_samples//2, 1)) * (x_start + length), axis=0)
-    tx_boundary = np.concatenate((t_boundary, x_boundary), axis = 1)
-
-    tx_eqn = tf.convert_to_tensor(tx_eqn, dtype = dtype)
-    tx_init = tf.convert_to_tensor(tx_init, dtype = dtype)
-    tx_boundary = tf.convert_to_tensor(tx_boundary, dtype = dtype)
-
-    y_eqn = tf.zeros((n_samples, 2), dtype = dtype)
-    y_init = init_function(tx_init)
-
-    return (tx_eqn, y_eqn), (tx_init, y_init), tx_boundary
-
-
 def simulate_poisson(n_samples, rhs_function, boundary_function, x_start: float = 0.0, length: float = 1.0, random_seed = 42, dtype = tf.float32) -> Tuple[Tuple[tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tensor]]:
     """
     Simulate the Poisson equation in 1D with a given right hand side and Dirichlet boundary conditions.
@@ -238,7 +211,22 @@ def simulate_advection(n_samples, boundary_function: Callable = None, x_start: f
     return (x_eqn, f_eqn), (x_boundary, u_boundary)
 
 
-def simulate_schrodinger_v2(n_samples, init_function, x_start, length, time, random_seed = 42, dtype = tf.float32):
+def simulate_schrodinger(n_samples, init_function, x_start, length, time, random_seed = 42, dtype = tf.float32):
+    """
+    Simulate the Schrodinger equation in 1D with a given initial condition.
+    Args:
+        n_samples (int): number of samples to generate
+        init_function (function): Function that returns the initial condition of the Schrodinger equation.
+        x_start (float): Start of the boundary.
+        length (float): Length of the domain.
+        time (float): Time of the simulation.
+        random_seed (int, optional): Random seed for reproducibility. Defaults to 42.
+        dtype (tf.dtype, optional): Data type of the samples. Defaults to tf.float32.
+
+    Returns:
+        Tuple[Tuple[tf.tensor, tf.tensor], Tuple[tf.tensor, tf.tensor], tf.tensor]: Tuple of tuples of tensors. \
+            The first tuple contains the equation samples, the second tuple the initial condition samples and the third tensor the boundary condition samples. \
+    """
 
     r = np.random.RandomState(random_seed)
     
