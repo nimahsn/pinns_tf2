@@ -5,7 +5,11 @@ This file contains the PINN models for the Advection, Burgers, Schrodinger, Pois
 from typing import Tuple, List, Union
 import tensorflow as tf
 import numpy as np
-from modules.utils import LOSS_BOUNDARY, LOSS_INITIAL, LOSS_RESIDUAL, MEAN_ABSOLUTE_ERROR
+
+LOSS_BOUNDARY = "loss_boundary"
+LOSS_INITIAL = "loss_initial"
+LOSS_RESIDUAL = "loss_residual"
+MEAN_ABSOLUTE_ERROR = "mean_absolute_error"
 
 def create_dense_model(layers: List[Union[int, "tf.keras.layers.Layer"]], activation: "tf.keras.activations.Activation", \
     initializer: "tf.keras.initializers.Initializer", n_inputs: int, n_outputs: int, **kwargs) -> "tf.keras.Model":
