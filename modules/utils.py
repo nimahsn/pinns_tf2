@@ -8,6 +8,7 @@ from modules.models import LOSS_BOUNDARY, LOSS_INITIAL, LOSS_RESIDUAL, MEAN_ABSO
 import numpy as np
 import pandas as pd
 import scipy.io
+import tensorflow as tf
 
 def get_id(layers, optimizer, initialization, activation):
     """
@@ -61,3 +62,18 @@ def load_mat_data(path):
     Loads the mat data from path into a dictionary
     """
     return scipy.io.loadmat(path)
+
+class PrintLossCallback(tf.keras.callbacks.Callback):
+    """
+    Callback for printing the loss each n epochs
+    """
+    
+    def __init__(self, n):
+        super().__init__()
+        self.n = n
+
+    def on_epoch_end(self, epoch, logs=None):
+        if epoch % self.n == 0:
+            print("Epoch: ", epoch, "Lr: ", f"{logs[LOSS_RESIDUAL]:.5f}", "Li: ", \
+                f"{logs[LOSS_INITIAL]:.5f}", "Lb: ", f"{logs[LOSS_BOUNDARY]:.5f}", "MAE: ", \
+                    f"{logs[MEAN_ABSOLUTE_ERROR]:.5f}")
