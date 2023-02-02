@@ -332,21 +332,27 @@ def plot_training_loss_linlog(history, save_path=None):
     plt.show()
 
 
-def plot_pointwise_error(y_true, y_pred, x, figsize = (10, 5), save_path=None):
+def plot_pointwise_error(y_true, y_pred, x, figsize = (7, 4), dpi = 100, y_scale = "linear", save_path=None, show=True):
     """
     Plot the pointwise error between the true and predicted values.
     Args:
         y_true: The true values.
         y_pred: The predicted values.
         x: The x-values.
+        figsize: The size of the figure.
+        dpi: The resolution of the figure.
+        y_scale: The scale of the y-axis. Either "linear" or "log".
     """
-    plt.figure(figsize=figsize, dpi = 150)
+    plt.figure(figsize=figsize, dpi=dpi)
     plt.plot(x, np.abs(y_true - y_pred))
+    plt.xscale("linear")
+    plt.yscale(y_scale)
     plt.xlabel('x')
     plt.ylabel('Absolute error')
     if save_path is not None:
         plt.savefig(save_path)
-    plt.show()
+    if show:
+        plt.show()
 
 
 def plot_pointwise_error_mesh(u_true_flat, u_pred_flat, t_mesh, x_mesh, cbar_limit=None, figsize=(7, 4), dpi=100, colormap = 'viridis', title="", save_path=None):
