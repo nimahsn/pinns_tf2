@@ -256,3 +256,63 @@ def simulate_schrodinger(n_samples, init_function, x_start, length, time, n_init
 
     return (tx_eqn, y_eqn), (tx_init, y_init), txx_boundary
 
+def simulate_reaction_diffusion(n_samples, n_init, n_boundary, solver_function, u0, nu, rho, x_start=0.0, length=2*np.pi, time=1.0,
+                                time_steps=200, x_steps=256, return_mesh=True, random_seed=42, dtype=tf.float32):
+    """
+    Simulate the reaction diffusion equation in 1D with dirichlet initial and boundary condition.
+    Args:
+        n_samples (int): number of samples to generate
+        n_init (int): number of initial condition samples to generate
+        n_boundary (int): number of boundary condition samples to generate
+        solver_function (function): Function that returns the solution of the reaction diffusion equation.
+        x_start (float, optional): Start of the boundary. Defaults to 0.0.
+        length (float, optional): Length of the domain. Defaults to 2*np.pi.
+        time (float, optional): Time of the simulation. Defaults to 1.0.
+        random_seed (int, optional): Random seed for reproducibility. Defaults to 42.
+        dtype (tf.dtype, optional): Data type of the samples. Defaults to tf.float32.
+    """
+
+    dx = length / x_steps
+    x = tf.range(x_start, x_start + length, dx, dtype=dtype)
+    t = tf.linspace(0.0, time, time_steps)
+    X, T = tf.meshgrid(x, t)
+    U = solver_function(u0, nu, rho, x_steps, time_steps)
+    # convert u to tf
+    U = tf.convert_to_tensor(U, dtype=dtype)
+    U = tf.reshape(U, X.shape)
+
+    X_interior = X[1:, 1:-1]
+    T_interior = T[1:, 1:-1]
+    U_interior = U[1:, 1:-1]
+    tx_interiors = tf.concat((tf.reshape(T_interior, (-1, 1)), tf.reshape(X_interior, (-1, 1))), axis=1)
+    u_interiors = tf.reshape(U_interior, (-1, 1))
+
+    x_boundary_start = tf.reshape(X[:, 0], (-1, 1))
+    x_boundary_end = tf.reshape(X[:, -1], (-1, 1))
+    u_boundary_start = tf.reshape(U[:, 0], (-1, 1))
+    u_boundary_end = tf.reshape(U[:, -1], (-1, 1))
+    tx_boundary_start = tf.concat((t[:, None], x_boundary_start), axis=1)
+    tx_boundary_end = tf.concat((t[:, None], x_boundary_end), axis=1)
+    tx_boundary = tf.concat((tx_boundary_start, tx_boundary_end), axis=0)
+    u_boundary = tf.concat((u_boundary_start, u_boundary_end), axis=0)
+
+    t_init = tf.zeros((x_steps, 1), dtype=dtype)
+    tx_init = tf.concat((t_init, x[:, None]), axis=1)
+    u_init = tf.reshape(U[0, :], (-1, 1))
+
+    #sample points
+    interior_indices = tf.random.shuffle(tf.range(tf.shape(tx_interiors)[0], dtype=tf.int32), seed=random_seed)[:n_samples]
+    boundary_indices = tf.random.shuffle(tf.range(tf.shape(tx_boundary)[0], dtype=tf.int32), seed=random_seed)[:n_boundary]
+    init_indices = tf.random.shuffle(tf.range(tf.shape(tx_init)[0], dtype=tf.int32), seed=random_seed)[:n_init]
+
+    tx_interior = tf.gather(tx_interiors, interior_indices)
+    u_interior = tf.gather(u_interiors, interior_indices)
+    tx_boundary = tf.gather(tx_boundary, boundary_indices)
+    u_boundary = tf.gather(u_boundary, boundary_indices)
+    tx_init = tf.gather(tx_init, init_indices)
+    u_init = tf.gather(u_init, init_indices)
+
+    if return_mesh:
+        return (tx_interior, u_interior), (tx_init, u_init), (tx_boundary, u_boundary), (X, T, U)
+    return (tx_interior, u_interior), (tx_init, u_init), (tx_boundary, u_boundary)
+
