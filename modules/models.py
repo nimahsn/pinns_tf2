@@ -901,7 +901,7 @@ class ReactionDiffusionPinn(tf.keras.Model):
                 u_samples = self.backbone(tx_samples, training=training)
             first_order = tape.batch_jacobian(u_samples, tx_samples)
             du_dt = first_order[..., 0]
-            du_dx = first_order
+            du_dx = first_order[..., 1]
         d2u_dx2 = tape2.batch_jacobian(du_dx, tx_samples)[..., 1]
         residual = du_dt - self._nu * d2u_dx2 - self._R(u_samples)
 
