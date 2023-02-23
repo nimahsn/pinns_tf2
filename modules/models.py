@@ -378,10 +378,10 @@ class SchrodingerPinn(tf.keras.Model):
             h_bnd = self.backbone(inputs_bnd, training=training)
         dh_dx_bnd = tape.batch_jacobian(h_bnd, inputs_bnd)[:, :, 1]
 
-        h_bnd_start = h_bnd[0:inputs_bnd_start.shape[0]]
-        h_bnd_end = h_bnd[inputs_bnd_start.shape[0]:]
-        dh_dx_start = dh_dx_bnd[0:inputs_bnd_start.shape[0]]
-        dh_dx_end = dh_dx_bnd[inputs_bnd_start.shape[0]:]
+        h_bnd_start = h_bnd[0:tf.shape(inputs_bnd_start)[0]]
+        h_bnd_end = h_bnd[tf.shape(inputs_bnd_start)[0]:]
+        dh_dx_start = dh_dx_bnd[0:tf.shape(inputs_bnd_start)[0]]
+        dh_dx_end = dh_dx_bnd[tf.shape(inputs_bnd_start)[0]:]
 
         return h_samples, lhs_samples, h_initial, h_bnd_start, h_bnd_end, dh_dx_start, dh_dx_end
 
@@ -513,8 +513,8 @@ class BurgersPinn(tf.keras.Model):
         lhs_samples = du_dt + u_samples * du_dx - self.nu * d2u_dx2
         tx_ib = tf.concat([tx_init, tx_bnd], axis=0)
         u_ib = self.backbone(tx_ib, training=training)
-        u_initial = u_ib[:tx_init.shape[0]]
-        u_bnd = u_ib[tx_init.shape[0]:]
+        u_initial = u_ib[:tf.shape(tx_init)[0]]
+        u_bnd = u_ib[tf.shape(tx_init)[0]:]
 
         return u_samples, lhs_samples, u_initial, u_bnd
 
@@ -641,8 +641,8 @@ class HeatPinn(tf.keras.Model):
 
         tx_ib = tf.concat([tx_init, tx_bnd], axis=0)
         u_ib = self.backbone(tx_ib, training=training)
-        u_initial = u_ib[:tx_init.shape[0]]
-        u_bnd = u_ib[tx_init.shape[0]:]
+        u_initial = u_ib[:tf.shape(tx_init)[0]]
+        u_bnd = u_ib[tf.shape(tx_init)[0]:]
 
         return u_samples, lhs_samples, u_initial, u_bnd
 

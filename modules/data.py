@@ -40,12 +40,12 @@ def simulate_burgers(n_samples, init_function=None, boundary_function=None, n_in
 
     assert n_bndry % 2 == 0, "n_bndry must be even"
 
-    tx_samples = tf.random.uni.uniform((n_samples, 2), -1, 1, dtype=dtype, seed=random_seed)
-    tx_samples[:, 1] = tx_samples[:, 1] * 2 - 1
+    tx_samples = tf.random.uniform((n_samples, 1), 0, 1, dtype=dtype, seed=random_seed)
+    tx_samples = tf.concat([tx_samples, tf.random.uniform((n_samples, 1), -1, 1, seed=random_seed, dtype=dtype)], axis=1)
     y_samples = tf.zeros((n_samples, 1), dtype=dtype)
 
     tx_init = tf.zeros((n_init, 1), dtype=dtype)
-    tx_init = tf.concat(tx_init, tf.random.uniform((n_init, 1), -1, 1, seed=random_seed, dtype=dtype), axis=1)
+    tx_init = tf.concat([tx_init, tf.random.uniform((n_init, 1), -1, 1, seed=random_seed, dtype=dtype)], axis=1)
     y_init = init_function(tx_init)
 
     tx_boundary = tf.random.uniform((n_bndry, 1), 0, 1, dtype=dtype, seed=random_seed)
