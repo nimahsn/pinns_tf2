@@ -907,8 +907,8 @@ class ReactionDiffusionPinn(tf.keras.Model):
 
         tx_bi = tf.concat([tx_init, tx_bnd], axis=0)
         u_bi = self.backbone(tx_bi, training=training)
-        u_init = u_bi[:tx_init.shape[0]]
-        u_bnd = u_bi[tx_init.shape[0]:]
+        u_init = u_bi[:tf.shape(tx_init)[0]]
+        u_bnd = u_bi[tf.shape(tx_init)[0]:]
 
         return u_samples, residual, u_init, u_bnd
 
