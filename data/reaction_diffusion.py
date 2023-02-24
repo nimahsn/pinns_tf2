@@ -1,5 +1,5 @@
 '''
-Functions for reaction-diffusion simulations. Adopted from Ghazal Farhani's code.
+Functions for reaction-diffusion simulations. Adopted from Ghazal's code.
 '''
 
 import numpy as np

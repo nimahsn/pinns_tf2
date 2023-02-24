@@ -273,19 +273,20 @@ def simulate_reaction_diffusion(n_samples, n_init, n_boundary, solver_function, 
     """
 
     dx = length / x_steps
-    x = tf.range(x_start, x_start + length, dx, dtype=dtype)
-    t = tf.linspace(0.0, time, time_steps)
+    dt = time / time_steps
+    x = np.arange(0, length, dx) # not inclusive of the last point
+    t = np.linspace(0, time, time_steps)
+    #convert to tf
+    x = tf.convert_to_tensor(x, dtype=dtype)
+    t = tf.convert_to_tensor(t, dtype=dtype)
     X, T = tf.meshgrid(x, t)
     U = solver_function(u0, nu, rho, x_steps, time_steps)
     # convert u to tf
     U = tf.convert_to_tensor(U, dtype=dtype)
     U = tf.reshape(U, X.shape)
 
-    X_interior = X[1:, 1:-1]
-    T_interior = T[1:, 1:-1]
-    U_interior = U[1:, 1:-1]
-    tx_interiors = tf.concat((tf.reshape(T_interior, (-1, 1)), tf.reshape(X_interior, (-1, 1))), axis=1)
-    u_interiors = tf.reshape(U_interior, (-1, 1))
+    tx_samples = tf.concat((tf.reshape(T, (-1, 1)), tf.reshape(X, (-1, 1))), axis=1)
+    u_samples = tf.reshape(U, (-1, 1))
 
     x_boundary_start = tf.reshape(X[:, 0], (-1, 1))
     x_boundary_end = tf.reshape(X[:, -1], (-1, 1))
@@ -301,18 +302,19 @@ def simulate_reaction_diffusion(n_samples, n_init, n_boundary, solver_function, 
     u_init = tf.reshape(U[0, :], (-1, 1))
 
     #sample points
-    interior_indices = tf.random.shuffle(tf.range(tf.shape(tx_interiors)[0], dtype=tf.int32), seed=random_seed)[:n_samples]
+    samples_indices = tf.random.shuffle(tf.range(tf.shape(tx_samples)[0], dtype=tf.int32), seed=random_seed)[:n_samples]
     boundary_indices = tf.random.shuffle(tf.range(tf.shape(tx_boundary)[0], dtype=tf.int32), seed=random_seed)[:n_boundary]
     init_indices = tf.random.shuffle(tf.range(tf.shape(tx_init)[0], dtype=tf.int32), seed=random_seed)[:n_init]
 
-    tx_interior = tf.gather(tx_interiors, interior_indices)
-    u_interior = tf.gather(u_interiors, interior_indices)
+    tx_samples = tf.gather(tx_samples, samples_indices)
+    u_samples = tf.gather(u_samples, samples_indices)
+    samples_residuals = tf.zeros_like(u_samples, dtype=dtype)
     tx_boundary = tf.gather(tx_boundary, boundary_indices)
     u_boundary = tf.gather(u_boundary, boundary_indices)
     tx_init = tf.gather(tx_init, init_indices)
     u_init = tf.gather(u_init, init_indices)
 
     if return_mesh:
-        return (tx_interior, u_interior), (tx_init, u_init), (tx_boundary, u_boundary), (X, T, U)
-    return (tx_interior, u_interior), (tx_init, u_init), (tx_boundary, u_boundary)
+        return (tx_samples, u_samples, samples_residuals), (tx_init, u_init), (tx_boundary, u_boundary), (X, T, U)
+    return (tx_samples, u_samples, samples_residuals), (tx_init, u_init), (tx_boundary, u_boundary)
 
