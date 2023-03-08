@@ -5,11 +5,26 @@ This file contains the PINN models for the Advection, Burgers, Schrodinger, Pois
 from typing import Tuple, List, Union, Callable
 import tensorflow as tf
 import numpy as np
+import sys
 
 LOSS_BOUNDARY = "loss_boundary"
 LOSS_INITIAL = "loss_initial"
 LOSS_RESIDUAL = "loss_residual"
 MEAN_ABSOLUTE_ERROR = "mean_absolute_error"
+
+def create_history_dictionary() -> dict:
+    """
+    Creates a history dictionary.
+
+    Returns:
+        The history dictionary.
+    """
+    return {
+        LOSS_BOUNDARY: [],
+        LOSS_INITIAL: [],
+        LOSS_RESIDUAL: [],
+        MEAN_ABSOLUTE_ERROR: []
+    }
 
 def create_dense_model(layers: List[Union[int, "tf.keras.layers.Layer"]], activation: "tf.keras.activations.Activation", \
     initializer: "tf.keras.initializers.Initializer", n_inputs: int, n_outputs: int, **kwargs) -> "tf.keras.Model":
@@ -830,7 +845,7 @@ class ReactionDiffusionPinn(tf.keras.Model):
         mae_tracker: The mean absolute error tracker.
     """
 
-    def __init__(self, backbone: tf.keras.Model, nu: float, reaction_function: Callable[[tf.Tensor], tf.Tensor] = None,
+    def __init__(self, backbone: tf.keras.Model, nu: float, lb, ub, reaction_function: Callable[[tf.Tensor], tf.Tensor] = None,
                  loss_residual_weight: float = 1.0, loss_initial_weight: float = 1.0,
                  loss_boundary_weight: float = 1.0, **kwargs):
         """
@@ -864,6 +879,8 @@ class ReactionDiffusionPinn(tf.keras.Model):
         self.res_loss = tf.keras.losses.MeanSquaredError()
         self.bnd_loss = tf.keras.losses.MeanSquaredError()
         self.init_loss = tf.keras.losses.MeanSquaredError()
+        self.lb = lb
+        self.ub = ub
 
     @staticmethod
     def get_fishers_reaction_function(rho: float = 1.0):
@@ -893,11 +910,16 @@ class ReactionDiffusionPinn(tf.keras.Model):
         tx_init = inputs[1]
         tx_bnd = inputs[2]
 
+        # tx_init_norm = 2.0 * (tx_init - self.lb) / (self.ub - self.lb) - 1.0
+        # tx_bnd_norm = 2.0 * (tx_bnd - self.lb) / (self.ub - self.lb) - 1.0
+        # tx_samples_norm = 2.0 * (tx_samples - self.lb) / (self.ub - self.lb) - 1.0
+
         with tf.GradientTape(watch_accessed_variables=False) as tape2:
             tape2.watch(tx_samples)
             
             with tf.GradientTape(watch_accessed_variables=False) as tape:
                 tape.watch(tx_samples)
+                # u_samples = self.backbone(tx_samples_norm, training=training)
                 u_samples = self.backbone(tx_samples, training=training)
             first_order = tape.batch_jacobian(u_samples, tx_samples)
             du_dt = first_order[..., 0]
@@ -905,6 +927,7 @@ class ReactionDiffusionPinn(tf.keras.Model):
         d2u_dx2 = tape2.batch_jacobian(du_dx, tx_samples)[..., 1]
         residual = du_dt - self._nu * d2u_dx2 - self._R(u_samples)
 
+        # tx_bi = tf.concat([tx_init_norm, tx_bnd_norm], axis=0)
         tx_bi = tf.concat([tx_init, tx_bnd], axis=0)
         u_bi = self.backbone(tx_bi, training=training)
         u_init = u_bi[:tf.shape(tx_init)[0]]
@@ -943,7 +966,33 @@ class ReactionDiffusionPinn(tf.keras.Model):
         self.loss_boundary_tracker.update_state(loss_bnd)
 
         return {m.name: m.result() for m in self.metrics}
+    
+    def fit_custom(self, inputs: List['tf.Tensor'], outputs: List['tf.Tensor'], epochs: int, print_every: int = 1000):
+        '''
+        Custom alternative to tensorflow fit function, mainly to allow inputs with different sizes. Training is done in full batches.
 
+        Args:
+            data: The data to train on. Should be a list of tensors: [tx_colloc, tx_init, tx_bnd]
+            outputs: The outputs to train on. Should be a list of tensors: [u_colloc, residual, u_init, u_bnd]. u_colloc is only used for the MAE metric.
+            epochs: The number of epochs to train for.
+            print_every: How often to print the metrics. Defaults to 1000.
+        '''
+        history = create_history_dictionary()
+        
+        for epoch in range(epochs):
+            metrs = self.train_step([inputs, outputs])
+            for key, value in metrs.items():
+                history[key].append(value.numpy())
+
+            if epoch % print_every == 0:
+                tf.print(f"Epoch {epoch}, Loss Residual: {metrs['loss_residual']:0.4f}, Loss Initial: {metrs['loss_initial']:0.4f}, Loss Boundary: {metrs['loss_boundary']:0.4f}, MAE: {metrs['mean_absolute_error']:0.4f}")
+                
+            #reset metrics
+            for m in self.metrics:
+                m.reset_states()
+
+        return history
+        
     @property
     def metrics(self):
         """
