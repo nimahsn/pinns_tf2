@@ -845,7 +845,7 @@ class ReactionDiffusionPinn(tf.keras.Model):
         mae_tracker: The mean absolute error tracker.
     """
 
-    def __init__(self, backbone: tf.keras.Model, nu: float, lb, ub, reaction_function: Callable[[tf.Tensor], tf.Tensor] = None,
+    def __init__(self, backbone: tf.keras.Model, nu: float, reaction_function: Callable[[tf.Tensor], tf.Tensor] = None,
                  loss_residual_weight: float = 1.0, loss_initial_weight: float = 1.0,
                  loss_boundary_weight: float = 1.0, **kwargs):
         """
@@ -879,8 +879,6 @@ class ReactionDiffusionPinn(tf.keras.Model):
         self.res_loss = tf.keras.losses.MeanSquaredError()
         self.bnd_loss = tf.keras.losses.MeanSquaredError()
         self.init_loss = tf.keras.losses.MeanSquaredError()
-        self.lb = lb
-        self.ub = ub
 
     @staticmethod
     def get_fishers_reaction_function(rho: float = 1.0):
@@ -910,16 +908,11 @@ class ReactionDiffusionPinn(tf.keras.Model):
         tx_init = inputs[1]
         tx_bnd = inputs[2]
 
-        # tx_init_norm = 2.0 * (tx_init - self.lb) / (self.ub - self.lb) - 1.0
-        # tx_bnd_norm = 2.0 * (tx_bnd - self.lb) / (self.ub - self.lb) - 1.0
-        # tx_samples_norm = 2.0 * (tx_samples - self.lb) / (self.ub - self.lb) - 1.0
-
         with tf.GradientTape(watch_accessed_variables=False) as tape2:
             tape2.watch(tx_samples)
             
             with tf.GradientTape(watch_accessed_variables=False) as tape:
                 tape.watch(tx_samples)
-                # u_samples = self.backbone(tx_samples_norm, training=training)
                 u_samples = self.backbone(tx_samples, training=training)
             first_order = tape.batch_jacobian(u_samples, tx_samples)
             du_dt = first_order[..., 0]
@@ -927,7 +920,6 @@ class ReactionDiffusionPinn(tf.keras.Model):
         d2u_dx2 = tape2.batch_jacobian(du_dx, tx_samples)[..., 1]
         residual = du_dt - self._nu * d2u_dx2 - self._R(u_samples)
 
-        # tx_bi = tf.concat([tx_init_norm, tx_bnd_norm], axis=0)
         tx_bi = tf.concat([tx_init, tx_bnd], axis=0)
         u_bi = self.backbone(tx_bi, training=training)
         u_init = u_bi[:tf.shape(tx_init)[0]]
