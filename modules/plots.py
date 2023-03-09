@@ -4,13 +4,48 @@ Utility module for plotting models and losses.
 
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.widgets import Slider, Button
 import numpy as np
 import tensorflow as tf
 from modules.models import LOSS_RESIDUAL, LOSS_BOUNDARY, LOSS_INITIAL, MEAN_ABSOLUTE_ERROR
 
 
-def plot_wave_at_x(model, x, time, save_path = None) -> None:
+def plot_wave_model_slider(model, x_start, length, time, figsize=(10,5), show=True) -> None:
+    '''
+    plot the solution of the wave equation for a given model with a time slider. If in a notebook, use %matplotlib notebook before calling this function.
+    The returned object must be kept in memory to keep the slider working.
+    '''
+    t, x = np.meshgrid(np.linspace(0, time, 100), np.linspace(x_start, x_start + length, 100))
+    tx = np.stack([t.flatten(), x.flatten()], axis=-1)
+    u = model.predict(tx, batch_size=1000)
+    u = u.reshape(t.shape)
+
+    init_time = 0
+    fig, ax = plt.subplots(figsize=figsize)
+    line, = ax.plot(x[:, 0].flatten(), u[init_time])
+
+    ax.set_xlim(x_start, x_start + length)
+    ax.set_xlabel('x')
+    ax.set_ylim([-1, 1])
+
+    fig.subplots_adjust(bottom=0.25)
+
+    axtime = plt.axes([0.25, 0.1, 0.65, 0.03])
+    stime = Slider(axtime, 'Time', 0, 99, valinit=init_time, valstep=1)
+
+    def update(val):
+        time = stime.val
+        line.set_ydata(u[time:time+1])
+        fig.canvas.draw_idle()
+
+    stime.on_changed(update)
+
+    if show:
+        plt.show()
+    return stime
+
+
+def plot_wave_at_x(model, x, time, save_path = None, show=True) -> None:
     """
     Plot the solution of the wave equation for a given model at a given x coordinate.
     Args:
@@ -26,10 +61,11 @@ def plot_wave_at_x(model, x, time, save_path = None) -> None:
     plt.ylabel('u')
     if save_path:
         plt.savefig(save_path)
-    plt.show()
+    if show:
+        plt.show()
 
 
-def plot_wave_model(model, x_start, length, time, save_path = None) -> None:
+def plot_wave_model(model, x_start, length, time, save_path = None, show=True) -> None:
     """
     Plot the solution of the wave equation for a given model.
     Args:
@@ -54,7 +90,6 @@ def plot_wave_model(model, x_start, length, time, save_path = None) -> None:
     ax.elev = 20
     # fig.colorbar(surf)
 
-
     ax = fig.add_subplot(312, projection='3d')
     surf = ax.scatter(t, x, np.reshape(u, t.shape), cmap='viridis', alpha=0.6)
     ax.set_xlabel('t')
@@ -63,7 +98,6 @@ def plot_wave_model(model, x_start, length, time, save_path = None) -> None:
     ax.azim = 45
     ax.elev = 20
     # fig.colorbar(surf)
-
 
     ax = fig.add_subplot(313, projection='3d')
     surf = ax.scatter(t, x, np.reshape(u, t.shape), cmap='viridis', alpha=0.6)
@@ -74,13 +108,13 @@ def plot_wave_model(model, x_start, length, time, save_path = None) -> None:
     ax.set_zlabel('u')
     # fig.colorbar(surf)
 
-
     if save_path:
         plt.savefig(save_path)
-    plt.show()
+    if show:
+        plt.show()
 
 
-def plot_burgers_model(model, save_path = None) -> None:
+def plot_burgers_model(model, save_path = None, show=True) -> None:
     """
     Plot the model predictions for the Burgers equation.
 
@@ -88,7 +122,6 @@ def plot_burgers_model(model, save_path = None) -> None:
         model: A trained BurgersPinn model.
         save_path: The path to save the plot to.
     """
-
     num_test_samples = 1000
     t_flat = np.linspace(0, 1, num_test_samples)
     x_flat = np.linspace(-1, 1, num_test_samples)
@@ -119,10 +152,11 @@ def plot_burgers_model(model, save_path = None) -> None:
     plt.tight_layout()
     if save_path is not None:
         plt.savefig(save_path)
-    plt.show()
+    if show:
+        plt.show()
 
 
-def plot_heat_model(model, length, time, save_path = None) -> None:
+def plot_heat_model(model, length, time, save_path = None, show=True) -> None:
     """
     Plot the model predictions for the heat equation.
     Args:
@@ -162,10 +196,11 @@ def plot_heat_model(model, length, time, save_path = None) -> None:
     plt.tight_layout()
     if save_path is not None:
         plt.savefig(save_path)
-    plt.show()
+    if show:
+        plt.show()
 
 
-def plot_schrodinger_model(model, x_start, length, time, fig_size = (7, 4), dpi = 100, save_path = None) -> None:
+def plot_schrodinger_model(model, x_start, length, time, fig_size = (7, 4), dpi = 100, save_path = None, show=True) -> None:
     """
     Plot the model predictions for the Schrodinger equation.
     Args:
@@ -205,10 +240,11 @@ def plot_schrodinger_model(model, x_start, length, time, fig_size = (7, 4), dpi 
     plt.tight_layout()
     if save_path is not None:
         plt.savefig(save_path)
-    plt.show()
+    if show:
+        plt.show()
 
 
-def plot_poisson_model(model, x_start, length, save_path = None) -> None:
+def plot_poisson_model(model, x_start, length, save_path = None, show=True) -> None:
     """
     Plot the model predictions for the Poisson equation.
     Args:
@@ -227,10 +263,11 @@ def plot_poisson_model(model, x_start, length, save_path = None) -> None:
     ax.set_ylabel('u(x)')
     if save_path is not None:
         plt.savefig(save_path)
-    plt.show()
+    if show:
+        plt.show()
 
 
-def plot_advection_model(model, x_start = 0.0, length = 1.0, save_path = None) -> None:
+def plot_advection_model(model, x_start = 0.0, length = 1.0, save_path = None, show=True) -> None:
     """
     Plot the model predictions for the advection equation.
     Args:
@@ -249,10 +286,11 @@ def plot_advection_model(model, x_start = 0.0, length = 1.0, save_path = None) -
     ax.set_ylabel('u(x)')
     if save_path is not None:
         plt.savefig(save_path)
-    plt.show()
+    if show:
+        plt.show()
 
 
-def plot_training_loss(history, x_scale = "linear", y_scale = "linear", save_path=None):
+def plot_training_loss(history, x_scale = "linear", y_scale = "linear", save_path=None, show=True):
     """
     Plot the training residual, initial, and boundary losses separately.
     Args:
@@ -280,9 +318,10 @@ def plot_training_loss(history, x_scale = "linear", y_scale = "linear", save_pat
     plt.legend()
     if save_path is not None:
         plt.savefig(save_path)
-    plt.show()
+    if show:
+        plt.show()
 
-def plot_training_loss_linlog(history, save_path=None):
+def plot_training_loss_linlog(history, save_path=None, show=True):
     """
         plot training loss with both linear and log y scales
 
@@ -329,27 +368,34 @@ def plot_training_loss_linlog(history, save_path=None):
     plt.legend()
     if save_path is not None:
         plt.savefig(save_path)
-    plt.show()
+    if show:
+        plt.show()
 
 
-def plot_pointwise_error(y_true, y_pred, x, figsize = (10, 5), save_path=None):
+def plot_pointwise_error(y_true, y_pred, x, figsize = (7, 4), dpi = 100, y_scale = "linear", save_path=None, show=True):
     """
     Plot the pointwise error between the true and predicted values.
     Args:
         y_true: The true values.
         y_pred: The predicted values.
         x: The x-values.
+        figsize: The size of the figure.
+        dpi: The resolution of the figure.
+        y_scale: The scale of the y-axis. Either "linear" or "log".
     """
-    plt.figure(figsize=figsize, dpi = 150)
+    plt.figure(figsize=figsize, dpi=dpi)
     plt.plot(x, np.abs(y_true - y_pred))
+    plt.xscale("linear")
+    plt.yscale(y_scale)
     plt.xlabel('x')
     plt.ylabel('Absolute error')
     if save_path is not None:
         plt.savefig(save_path)
-    plt.show()
+    if show:
+        plt.show()
 
 
-def plot_pointwise_error_mesh(u_true_flat, u_pred_flat, t_mesh, x_mesh, cbar_limit=None, figsize=(7, 4), dpi=100, colormap = 'viridis', title="", save_path=None):
+def plot_pointwise_error_mesh(u_true_flat, u_pred_flat, t_mesh, x_mesh, cbar_limit=None, figsize=(7, 4), dpi=100, colormap = 'viridis', title="", save_path=None, show=True):
     """
     Plot the pointwise error between the true and predicted values.
     Args:
@@ -375,4 +421,6 @@ def plot_pointwise_error_mesh(u_true_flat, u_pred_flat, t_mesh, x_mesh, cbar_lim
     plt.title(title)
     if save_path is not None:
         plt.savefig(save_path)
-    plt.show()
+    if show:
+        plt.show()
+
