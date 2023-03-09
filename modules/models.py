@@ -90,7 +90,8 @@ class AdvectionPinn(tf.keras.Model):
         self.mae_tracker = tf.keras.metrics.MeanAbsoluteError(name=MEAN_ABSOLUTE_ERROR)
         self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight", dtype=tf.keras.backend.floatx())
         self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, name="loss_boundary_weight", dtype=tf.keras.backend.floatx())
-
+        self.res_loss = tf.keras.losses.MeanSquaredError()
+        self.bnd_loss = tf.keras.losses.MeanSquaredError()
 
     def set_loss_weights(self, loss_residual_weight: float, loss_boundary_weight: float):
         """
@@ -180,8 +181,8 @@ class AdvectionPinn(tf.keras.Model):
         # compute residual loss with samples
         with tf.GradientTape() as tape:
             u_samples, lhs_samples, u_bnd = self(x, training=True)
-            loss_residual = tf.losses.mean_squared_error(y[1], lhs_samples)
-            loss_boundary = tf.losses.mean_squared_error(y[2], u_bnd)
+            loss_residual = self.res_loss(y[1], lhs_samples)
+            loss_boundary = self.bnd_loss(y[2], u_bnd)
             loss = self._loss_residual_weight * loss_residual + self._loss_boundary_weight * loss_boundary
 
         trainable_vars = self.trainable_variables
@@ -387,7 +388,9 @@ class SchrodingerPinn(tf.keras.Model):
         self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight", dtype=tf.keras.backend.floatx())
         self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, name="loss_boundary_weight", dtype=tf.keras.backend.floatx())
         self._loss_initial_weight = tf.Variable(loss_initial_weight, trainable=False, name="loss_initial_weight", dtype=tf.keras.backend.floatx())
-
+        self.res_loss = tf.keras.losses.MeanSquaredError()
+        self.bnd_loss = tf.keras.losses.MeanSquaredError()
+        self.init_loss = tf.keras.losses.MeanSquaredError()
 
     def set_loss_weights(self, loss_residual_weight: float, loss_initial_weight: float, loss_boundary_weight: float):
         """
@@ -477,11 +480,10 @@ class SchrodingerPinn(tf.keras.Model):
         with tf.GradientTape() as tape:
             h_samples, lhs_samples, h_initial, h_bnd_start, h_bnd_end, dh_dx_start, dh_dx_end = \
                 self([tx_samples, tx_initial, tx_bnd_start, tx_bnd_end], training=True)
-
-            loss_residual = tf.losses.mean_squared_error(rhs_samples_exact, lhs_samples)
-            loss_initial = tf.losses.mean_squared_error(h_initial_exact, h_initial)
-            loss_boundary_h = tf.losses.mean_squared_error(h_bnd_start, h_bnd_end)
-            loss_boundary_dh_dx = tf.losses.mean_squared_error(dh_dx_start, dh_dx_end)
+            loss_residual = self.res_loss(rhs_samples_exact, lhs_samples)
+            loss_initial = self.init_loss(h_initial_exact, h_initial)
+            loss_boundary_h = self.bnd_loss(h_bnd_start, h_bnd_end)
+            loss_boundary_dh_dx = self.bnd_loss(dh_dx_start, dh_dx_end)
             loss_boundary = loss_boundary_h + loss_boundary_dh_dx
             loss = self._loss_residual_weight * loss_residual + self._loss_initial_weight * loss_initial + \
                 self._loss_boundary_weight * loss_boundary
@@ -495,6 +497,32 @@ class SchrodingerPinn(tf.keras.Model):
         self.mae_tracker.update_state(h_samples_exact, h_samples)
 
         return {m.name: m.result() for m in self.metrics}
+    
+    def fit_custom(self, inputs: List['tf.Tensor'], outputs: List['tf.Tensor'], epochs: int, print_every: int = 1000):
+        '''
+        Custom alternative to tensorflow fit function, mainly to allow inputs with different sizes. Training is done in full batches.
+
+        Args:
+            data: The data to train on. Should be a list of tensors: [tx_colloc, tx_init, tx_bnd]
+            outputs: The outputs to train on. Should be a list of tensors: [u_colloc, residual, u_init, u_bnd]. u_colloc is only used for the MAE metric.
+            epochs: The number of epochs to train for.
+            print_every: How often to print the metrics. Defaults to 1000.
+        '''
+        history = create_history_dictionary()
+        
+        for epoch in range(epochs):
+            metrs = self.train_step([inputs, outputs])
+            for key, value in metrs.items():
+                history[key].append(value.numpy())
+
+            if epoch % print_every == 0:
+                tf.print(f"Epoch {epoch}, Loss Residual: {metrs['loss_residual']:0.4f}, Loss Initial: {metrs['loss_initial']:0.4f}, Loss Boundary: {metrs['loss_boundary']:0.4f}, MAE: {metrs['mean_absolute_error']:0.4f}")
+                
+            #reset metrics
+            for m in self.metrics:
+                m.reset_states()
+
+        return history
 
     @property
     def metrics(self):
@@ -532,7 +560,9 @@ class BurgersPinn(tf.keras.Model):
         self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight", dtype=tf.keras.backend.floatx())
         self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, name="loss_boundary_weight", dtype=tf.keras.backend.floatx())
         self._loss_initial_weight = tf.Variable(loss_initial_weight, trainable=False, name="loss_initial_weight", dtype=tf.keras.backend.floatx())
-
+        self.res_loss = tf.keras.losses.MeanSquaredError()
+        self.init_loss = tf.keras.losses.MeanSquaredError()
+        self.bnd_loss = tf.keras.losses.MeanSquaredError()
 
     def set_loss_weights(self, loss_residual_weight: float, loss_initial_weight: float, loss_boundary_weight: float):
         """
@@ -608,9 +638,9 @@ class BurgersPinn(tf.keras.Model):
         with tf.GradientTape() as tape:
             u_samples, lhs_samples, u_initial, u_bnd = self(inputs, training=True)
 
-            loss_residual = tf.losses.mean_squared_error(rhs_samples_exact, lhs_samples)
-            loss_initial = tf.losses.mean_squared_error(u_initial_exact, u_initial)
-            loss_boundary = tf.losses.mean_squared_error(u_bnd_exact, u_bnd)
+            loss_residual = self.res_loss(rhs_samples_exact, lhs_samples)
+            loss_initial = self.init_loss(u_initial_exact, u_initial)
+            loss_boundary = self.bnd_loss(u_bnd_exact, u_bnd)
             loss = self._loss_residual_weight * loss_residual + self._loss_initial_weight * loss_initial + \
                 self._loss_boundary_weight * loss_boundary
 
@@ -686,7 +716,9 @@ class HeatPinn(tf.keras.Model):
         self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight", dtype=tf.keras.backend.floatx())
         self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, name="loss_boundary_weight", dtype=tf.keras.backend.floatx())
         self._loss_initial_weight = tf.Variable(loss_initial_weight, trainable=False, name="loss_initial_weight", dtype=tf.keras.backend.floatx())
-
+        self.res_loss = tf.keras.losses.MeanSquaredError()
+        self.init_loss = tf.keras.losses.MeanSquaredError()
+        self.bnd_loss = tf.keras.losses.MeanSquaredError()
 
     def set_loss_weights(self, loss_residual_weight: float, loss_initial_weight: float, loss_boundary_weight: float):
         """
@@ -759,9 +791,9 @@ class HeatPinn(tf.keras.Model):
         with tf.GradientTape() as tape:
             u_samples, lhs_samples, u_initial, u_bnd = self(inputs, training=True)
 
-            loss_residual = tf.losses.mean_squared_error(rhs_samples_exact, lhs_samples)
-            loss_initial = tf.losses.mean_squared_error(u_initial_exact, u_initial)
-            loss_boundary = tf.losses.mean_squared_error(u_bnd_exact, u_bnd)
+            loss_residual = self.res_loss(rhs_samples_exact, lhs_samples)
+            loss_initial = self.init_loss(u_initial_exact, u_initial)
+            loss_boundary = self.bnd_loss(u_bnd_exact, u_bnd)
             loss = self._loss_residual_weight * loss_residual + self._loss_initial_weight * loss_initial + \
                 self._loss_boundary_weight * loss_boundary
 
@@ -774,6 +806,32 @@ class HeatPinn(tf.keras.Model):
         self.loss_boundary_tracker.update_state(loss_boundary)
 
         return {m.name: m.result() for m in self.metrics}
+    
+    def fit_custom(self, inputs: List['tf.Tensor'], outputs: List['tf.Tensor'], epochs: int, print_every: int = 1000):
+        '''
+        Custom alternative to tensorflow fit function, mainly to allow inputs with different sizes. Training is done in full batches.
+
+        Args:
+            data: The data to train on. Should be a list of tensors: [tx_colloc, tx_init, tx_bnd]
+            outputs: The outputs to train on. Should be a list of tensors: [u_colloc, residual, u_init, u_bnd]. u_colloc is only used for the MAE metric.
+            epochs: The number of epochs to train for.
+            print_every: How often to print the metrics. Defaults to 1000.
+        '''
+        history = create_history_dictionary()
+        
+        for epoch in range(epochs):
+            metrs = self.train_step([inputs, outputs])
+            for key, value in metrs.items():
+                history[key].append(value.numpy())
+
+            if epoch % print_every == 0:
+                tf.print(f"Epoch {epoch}, Loss Residual: {metrs['loss_residual']:0.4f}, Loss Initial: {metrs['loss_initial']:0.4f}, Loss Boundary: {metrs['loss_boundary']:0.4f}, MAE: {metrs['mean_absolute_error']:0.4f}")
+                
+            #reset metrics
+            for m in self.metrics:
+                m.reset_states()
+
+        return history
 
     @property
     def metrics(self):
@@ -810,6 +868,9 @@ class WavePinn(tf.keras.Model):
         self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight", dtype=tf.keras.backend.floatx())
         self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, name="loss_boundary_weight", dtype=tf.keras.backend.floatx())
         self._loss_initial_weight = tf.Variable(loss_initial_weight, trainable=False, name="loss_initial_weight", dtype=tf.keras.backend.floatx())
+        self.res_loss = tf.keras.losses.MeanSquaredError()
+        self.init_loss = tf.keras.losses.MeanSquaredError()
+        self.bnd_loss = tf.keras.losses.MeanSquaredError()
 
     def set_loss_weights(self, loss_residual_weight: float, loss_initial_weight: float, loss_boundary_weight: float):
         """
@@ -882,12 +943,11 @@ class WavePinn(tf.keras.Model):
 
         with tf.GradientTape() as tape:
             u_samples, lhs_samples, u_initial, du_dt_init, u_bnd = self(inputs, training=True)
-
-            loss_residual = tf.losses.mean_squared_error(rhs_samples_exact, lhs_samples)
-            loss_initial_neumann = tf.losses.mean_squared_error(du_dt_init_exact, du_dt_init)
-            loss_initial_dirichlet = tf.losses.mean_squared_error(u_initial_exact, u_initial)
+            loss_residual = self.res_loss(rhs_samples_exact, lhs_samples)
+            loss_initial_neumann = self.init_loss(du_dt_init_exact, du_dt_init)
+            loss_initial_dirichlet = self.init_loss(u_initial_exact, u_initial)
             loss_initial = loss_initial_neumann + loss_initial_dirichlet
-            loss_boundary = tf.losses.mean_squared_error(u_bnd_exact, u_bnd)
+            loss_boundary = self.bnd_loss(u_bnd_exact, u_bnd)
             loss = self._loss_residual_weight * loss_residual + self._loss_initial_weight * loss_initial + \
                 self._loss_boundary_weight * loss_boundary
 
@@ -900,6 +960,32 @@ class WavePinn(tf.keras.Model):
         self.loss_boundary_tracker.update_state(loss_boundary)
 
         return {m.name: m.result() for m in self.metrics}
+    
+    def fit_custom(self, inputs: List['tf.Tensor'], outputs: List['tf.Tensor'], epochs: int, print_every: int = 1000):
+        '''
+        Custom alternative to tensorflow fit function, mainly to allow inputs with different sizes. Training is done in full batches.
+
+        Args:
+            data: The data to train on. Should be a list of tensors: [tx_colloc, tx_init, tx_bnd]
+            outputs: The outputs to train on. Should be a list of tensors: [u_colloc, residual, u_init, u_bnd]. u_colloc is only used for the MAE metric.
+            epochs: The number of epochs to train for.
+            print_every: How often to print the metrics. Defaults to 1000.
+        '''
+        history = create_history_dictionary()
+        
+        for epoch in range(epochs):
+            metrs = self.train_step([inputs, outputs])
+            for key, value in metrs.items():
+                history[key].append(value.numpy())
+
+            if epoch % print_every == 0:
+                tf.print(f"Epoch {epoch}, Loss Residual: {metrs['loss_residual']:0.4f}, Loss Initial: {metrs['loss_initial']:0.4f}, Loss Boundary: {metrs['loss_boundary']:0.4f}, MAE: {metrs['mean_absolute_error']:0.4f}")
+                
+            #reset metrics
+            for m in self.metrics:
+                m.reset_states()
+
+        return history
 
     @property
     def metrics(self):
