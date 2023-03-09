@@ -233,6 +233,8 @@ class PoissonPinn(tf.keras.Model):
         self.mae_tracker = tf.keras.metrics.MeanAbsoluteError(name=MEAN_ABSOLUTE_ERROR)
         self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight", dtype=tf.keras.backend.floatx())
         self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, name="loss_boundary_weight", dtype=tf.keras.backend.floatx())
+        self.res_loss = tf.keras.losses.MeanSquaredError()
+        self.bnd_loss = tf.keras.losses.MeanSquaredError()
 
     def set_loss_weights(self, loss_residual_weight: float, loss_boundary_weight: float):
         """
@@ -297,8 +299,9 @@ class PoissonPinn(tf.keras.Model):
         # compute residual loss with samples
         with tf.GradientTape() as tape:
             u_samples, lhs_samples, u_bnd = self(inputs, training=True)
-            loss_residual = tf.losses.mean_squared_error(rhs_exact, lhs_samples)
-            loss_boundary = tf.losses.mean_squared_error(u_bnd_exact, u_bnd)
+            # loss_residual = tf.losses.mean_squared_error(rhs_exact, lhs_samples)
+            loss_residual = self.res_loss(rhs_exact, lhs_samples)
+            loss_boundary = self.bnd_loss(u_bnd_exact, u_bnd)
             loss = self._loss_residual_weight * loss_residual + self._loss_boundary_weight * loss_boundary
 
         trainable_vars = self.trainable_variables
