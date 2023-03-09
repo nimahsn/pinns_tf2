@@ -135,6 +135,32 @@ class AdvectionPinn(tf.keras.Model):
         u_bnd = self.backbone(inputs_bnd, training=training)
 
         return u_samples, lhs_samples, u_bnd
+    
+    def fit_custom(self, inputs: List['tf.Tensor'], outputs: List['tf.Tensor'], epochs: int, print_every: int = 1000):
+        '''
+        Custom alternative to tensorflow fit function, mainly to allow inputs with different sizes. Training is done in full batches.
+
+        Args:
+            data: The data to train on. Should be a list of tensors: [tx_colloc, tx_bnd]
+            outputs: The outputs to train on. Should be a list of tensors: [u_colloc, residual, u_bnd]. u_colloc is only used for the MAE metric.
+            epochs: The number of epochs to train for.
+            print_every: How often to print the metrics. Defaults to 1000.
+        '''
+        history = create_history_dictionary()
+        
+        for epoch in range(epochs):
+            metrs = self.train_step([inputs, outputs])
+            for key, value in metrs.items():
+                history[key].append(value.numpy())
+
+            if epoch % print_every == 0:
+                tf.print(f"Epoch {epoch}, Loss Residual: {metrs['loss_residual']:0.4f}, Loss Boundary: {metrs['loss_boundary']:0.4f}, MAE: {metrs['mean_absolute_error']:0.4f}")
+                
+            #reset metrics
+            for m in self.metrics:
+                m.reset_states()
+
+        return history
 
     def train_step(self, data: Tuple["tf.Tensor", "tf.Tensor"]) -> "tf.Tensor":
         """
@@ -284,7 +310,32 @@ class PoissonPinn(tf.keras.Model):
         self.mae_tracker.update_state(u_exact, u_samples)
 
         return {m.name: m.result() for m in self.metrics}
+    
+    def fit_custom(self, inputs: List['tf.Tensor'], outputs: List['tf.Tensor'], epochs: int, print_every: int = 1000):
+        '''
+        Custom alternative to tensorflow fit function, mainly to allow inputs with different sizes. Training is done in full batches.
 
+        Args:
+            data: The data to train on. Should be a list of tensors: [tx_colloc, tx_bnd]
+            outputs: The outputs to train on. Should be a list of tensors: [u_colloc, residual, u_bnd]. u_colloc is only used for the MAE metric.
+            epochs: The number of epochs to train for.
+            print_every: How often to print the metrics. Defaults to 1000.
+        '''
+        history = create_history_dictionary()
+        
+        for epoch in range(epochs):
+            metrs = self.train_step([inputs, outputs])
+            for key, value in metrs.items():
+                history[key].append(value.numpy())
+
+            if epoch % print_every == 0:
+                tf.print(f"Epoch {epoch}, Loss Residual: {metrs['loss_residual']:0.4f}, Loss Boundary: {metrs['loss_boundary']:0.4f}, MAE: {metrs['mean_absolute_error']:0.4f}")
+                
+            #reset metrics
+            for m in self.metrics:
+                m.reset_states()
+
+        return history
 
     @property
     def metrics(self):
