@@ -8,5 +8,6 @@ Impleneted equations are
 - Poisson,
 - Schrodinger's,
 - and Burger's.
+
 Examples of each equation are available in the notebooks. This implementation is not a general PDE solver, but you can write your own PINN model similarly.
 
