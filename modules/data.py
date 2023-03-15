@@ -369,6 +369,7 @@ def simulate_klein_gordon(n_colloc, n_init, n_bnd, rhs_function=None, init_funct
     tx_bnd = tf.random.uniform((n_bnd // 2, 2), minval=[0.0, x_start], maxval=[time, x_start], dtype=dtype, seed=random_seed)
     tx_bnd = tf.concat((tx_bnd, tf.random.uniform((n_bnd // 2, 2), minval=[0.0, x_start+length], maxval=[time, x_start+length], \
                                                   dtype=dtype, seed=random_seed)), axis=0)
+    tx_bnd = tf.gather(tx_bnd, tf.random.shuffle(tf.range(tf.shape(tx_bnd)[0], dtype=tf.int32), seed=random_seed))
     if bnd_function is None:
         u_bnd = tf.zeros((n_bnd, 1), dtype=dtype)
     else:
