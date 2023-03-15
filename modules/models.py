@@ -1162,8 +1162,8 @@ class KleinGordonEquation(tf.keras.Model):
     '''
     Class for the Klein Gordon Equation.
     '''
-    def __init__(self, backbone: "tf.keras.Model", alpha: float = -1.0, beta: float = 0, gamma: float = 1, k: int = 3, \
-                 loss_residual_weight: float = 1, loss_initial_weight: float = 1, loss_boundary_weight: float = 1, \
+    def __init__(self, backbone: "tf.keras.Model", alpha: float = -1.0, beta: float = 0.0, gamma: float = 1.0, k: int = 3, \
+                 loss_residual_weight: float = 1.0, loss_initial_weight: float = 1.0, loss_boundary_weight: float = 1.0, \
                     *args, **kwargs):
         '''
         Args:
