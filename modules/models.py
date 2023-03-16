@@ -1206,6 +1206,7 @@ class KleinGordonEquation(tf.keras.Model):
         self._loss_boundary_weight.assign(loss_boundary_weight)
         self._loss_initial_weight.assign(loss_initial_weight)
 
+    @tf.function
     def call(self, inputs, training=None, mask=None):
         """
         Performs a forward pass.
@@ -1241,6 +1242,7 @@ class KleinGordonEquation(tf.keras.Model):
 
         return [u_colloc, residual, u_init, u_t_init, u_bnd]
     
+    @tf.function
     def train_step(self, data):
         """
         Performs a training step.
