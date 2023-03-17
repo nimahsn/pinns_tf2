@@ -330,3 +330,50 @@ def simulate_reaction_diffusion(n_samples, n_init, n_boundary, solver_function, 
         return (tx_samples, u_samples, samples_residuals), (tx_init, u_init), (tx_boundary, u_boundary), (X, T, U)
     return (tx_samples, u_samples, samples_residuals), (tx_init, u_init), (tx_boundary, u_boundary)
 
+def simulate_klein_gordon(n_colloc, n_init, n_bnd, rhs_function=None, init_function=None, bnd_function=None, init_ut_function=None, x_start=0.0, length=1.0, \
+                          time=1.0, dtype=tf.float32, random_seed=42):
+    """
+    Simulate the Klein Gordon equation in 1D with dirichlet-neuman initial and dirichlet boundary condition.
+
+    Args:
+        n_colloc (int): number of collocation points to generate
+        n_init (int): number of initial condition samples to generate
+        n_bnd (int): number of boundary condition samples to generate
+        rhs_function (function, optional): Function that returns the right hand side of the PDE. Defaults to None. If None, zero is used.
+        init_function (function, optional): Function that returns the initial condition. Defaults to None. If None, zero is used.
+        bnd_function (function, optional): Function that returns the boundary condition. Defaults to None. If None, zero is used.
+        init_ut_function (function, optional): Function that returns the initial condition for the time derivative. Defaults to None. If None, zero is used.
+        x_start (float, optional): Start of the boundary. Defaults to 0.0.
+        length (float, optional): Length of the domain. Defaults to 1.0.
+        time (float, optional): Time of the simulation. Defaults to 1.0.
+        random_seed (int, optional): Random seed for reproducibility. Defaults to 42.
+        dtype (tf.dtype, optional): Data type of the samples. Defaults to tf.float32.
+    """
+
+    tx_colloc = tf.random.uniform((n_colloc, 2), minval=[0.0, x_start], maxval=[time, x_start+length], dtype=dtype, seed=random_seed)
+    if rhs_function is None:
+        rhs = tf.zeros((n_colloc, 1), dtype=dtype)
+    else:
+        rhs = rhs_function(tx_colloc)
+
+    tx_init = tf.random.uniform((n_init, 2), minval=[0.0, x_start], maxval=[0.0, x_start+length], dtype=dtype, seed=random_seed)
+    if init_function is None:
+        u_init = tf.zeros((n_init, 1), dtype=dtype)
+    else:
+        u_init = init_function(tx_init)
+    if init_ut_function is None:
+        ut_init = tf.zeros((n_init, 1), dtype=dtype)
+    else:
+        ut_init = init_ut_function(tx_init)
+    
+    tx_bnd = tf.random.uniform((n_bnd // 2, 2), minval=[0.0, x_start], maxval=[time, x_start], dtype=dtype, seed=random_seed)
+    tx_bnd = tf.concat((tx_bnd, tf.random.uniform((n_bnd // 2, 2), minval=[0.0, x_start+length], maxval=[time, x_start+length], \
+                                                  dtype=dtype, seed=random_seed)), axis=0)
+    tx_bnd = tf.gather(tx_bnd, tf.random.shuffle(tf.range(tf.shape(tx_bnd)[0], dtype=tf.int32), seed=random_seed))
+    if bnd_function is None:
+        u_bnd = tf.zeros((n_bnd, 1), dtype=dtype)
+    else:
+        u_bnd = bnd_function(tx_bnd)
+
+    return (tx_colloc, rhs), (tx_init, u_init, ut_init), (tx_bnd, u_bnd)
+
