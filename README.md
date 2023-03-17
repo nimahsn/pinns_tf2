@@ -7,7 +7,8 @@ Impleneted equations are
 - Stationary Advection-Diffusion,
 - Poisson,
 - Schrodinger's,
-- and Burger's.
+- Burger's,
+- and Klein Gordon.
 
 Examples of each equation are available in the notebooks. This implementation is not a general PDE solver, but you can write your own PINN model similarly.
 
