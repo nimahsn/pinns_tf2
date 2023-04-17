@@ -1128,47 +1128,33 @@ class ReactionDiffusionPinn(tf.keras.Model):
 
         return {m.name: m.result() for m in self.metrics}
     
-    def evaluate(self, x=None, y=None, batch_size=None, verbose="auto", sample_weight=None, steps=None, callbacks=None, max_queue_size=10, workers=1, use_multiprocessing=False, return_dict=False, **kwargs):
+    def test_step(self, data):
         """
-        Evaluates the model.
+        Performs a test step.
 
         Args:
-            x: The input data.
-            y: The target data.
-            batch_size: The batch size.
-            verbose: The verbosity.
-            sample_weight: The sample weights.
-            steps: The number of steps.
-            callbacks: The callbacks.
-            max_queue_size: The maximum queue size.
-            workers: The number of workers.
-            use_multiprocessing: Whether or not to use multiprocessing.
-            return_dict: Whether or not to return a dictionary.
-            **kwargs: Additional arguments.
+            data: The data to test on.
 
         Returns:
             The metrics of the model.
         """
-        
-        #reset metrics
-        for m in self.metrics:
-            m.reset_states()
+        x, y = data
+        u_exact_colloc, residual_exact, u_initial_exact, u_bnd_exact = y
 
-        #evaluate
-        u_samples, residuals, u_init, u_bndry = self.call(x, training=False)
-        loss_res = self.res_loss(y[1], residuals)
-        loss_init = self.init_loss(y[2], u_init)
-        loss_bnd = self.bnd_loss(y[3], u_bndry)
+        u_colloc, residual, u_init, u_bnd = self(x, training=False)
+        loss_res = self.res_loss(residual_exact, residual)
+        loss_init = self.init_loss(u_initial_exact, u_init)
+        loss_bnd = self.bnd_loss(u_bnd_exact, u_bnd)
         loss = self._loss_residual_weight * loss_res + self._loss_initial_weight * loss_init + \
-                        self._loss_boundary_weight * loss_bnd
-        
-        self.mae_tracker.update_state(y[0], u_samples)
+                 self._loss_boundary_weight * loss_bnd
+
         self.loss_total_tracker.update_state(loss)
+        self.mae_tracker.update_state(u_exact_colloc, u_colloc)
         self.loss_residual_tracker.update_state(loss_res)
         self.loss_initial_tracker.update_state(loss_init)
         self.loss_boundary_tracker.update_state(loss_bnd)
 
-        return [m.result() for m in self.metrics]    
+        return {m.name: m.result() for m in self.metrics}
     
     def fit_custom(self, inputs: List['tf.Tensor'], outputs: List['tf.Tensor'], epochs: int, print_every: int = 1000):
         '''
@@ -1319,28 +1305,28 @@ class KleinGordonEquation(tf.keras.Model):
         
         return {m.name: m.result() for m in self.metrics}
     
-    def evaluate(self, inputs: List['tf.Tensor'], outputs: List['tf.Tensor'], batch_size: int = 32):
-        '''
-        Evaluates the model on the given data.
-
-        Args:
-            inputs: The inputs to the model. Should be a list of tensors: [tx_colloc, tx_init, tx_bnd]
-            outputs: The outputs to train on. Should be a list of tensors: [u_colloc, residual, u_init, u_t_init, u_bnd]. u_colloc is only used for the MAE metric.
-            batch_size: The batch size to use. Defaults to 32.
-
-        Returns:
-            The metrics of the model.
-        '''
+    def test_step(self, data):
+        """
+        Performs a test step.
+        """
+        
+        inputs, outputs = data
         u_colloc, residual, u_init, u_t_init, u_bnd = outputs
-        u_colloc_pred, residual_pred, u_init_pred, u_t_init_pred, u_bnd_pred = self(inputs, training=False)
+        
+        u_colloc_pred, residual_pred, u_init_pred, u_t_init_pred, u_bnd_pred = self(inputs, training=True)
         loss_residual = self.res_loss(residual, residual_pred)
         loss_initial = self.init_loss(u_init, u_init_pred) + self.init_loss(u_t_init, u_t_init_pred)
         loss_boundary = self.bnd_loss(u_bnd, u_bnd_pred)
         loss = self._loss_residual_weight * loss_residual + self._loss_initial_weight * loss_initial + self._loss_boundary_weight * loss_boundary
-        mae = self.mae_tracker(u_colloc, u_colloc_pred)
         
-        return {LOSS_TOTAL: loss, LOSS_RESIDUAL: loss_residual, LOSS_INITIAL: loss_initial, LOSS_BOUNDARY: loss_boundary, MEAN_ABSOLUTE_ERROR: mae}
-    
+        self.loss_total_tracker.update_state(loss)
+        self.loss_residual_tracker.update_state(loss_residual)
+        self.loss_initial_tracker.update_state(loss_initial)
+        self.loss_boundary_tracker.update_state(loss_boundary)
+        self.mae_tracker.update_state(u_colloc, u_colloc_pred)    
+
+        return {m.name: m.result() for m in self.metrics}
+
     def fit_custom(self, inputs: List['tf.Tensor'], outputs: List['tf.Tensor'], epochs: int, print_every: int = 1000):
         '''
         Custom alternative to tensorflow fit function, mainly to allow inputs with different sizes. Training is done in full batches.
