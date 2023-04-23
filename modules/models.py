@@ -7,6 +7,7 @@ import tensorflow as tf
 import numpy as np
 import sys
 
+LOSS_TOTAL = "loss_total"
 LOSS_BOUNDARY = "loss_boundary"
 LOSS_INITIAL = "loss_initial"
 LOSS_RESIDUAL = "loss_residual"
@@ -87,6 +88,7 @@ class AdvectionPinn(tf.keras.Model):
         self.k = k
         self.loss_boundary_tracker = tf.keras.metrics.Mean(name=LOSS_BOUNDARY)
         self.loss_residual_tracker = tf.keras.metrics.Mean(name=LOSS_RESIDUAL)
+        self.loss_total_tracker = tf.keras.metrics.Mean(name=LOSS_TOTAL)
         self.mae_tracker = tf.keras.metrics.MeanAbsoluteError(name=MEAN_ABSOLUTE_ERROR)
         self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight", dtype=tf.keras.backend.floatx())
         self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, name="loss_boundary_weight", dtype=tf.keras.backend.floatx())
@@ -189,10 +191,29 @@ class AdvectionPinn(tf.keras.Model):
         gradients = tape.gradient(loss, trainable_vars)
         self.optimizer.apply_gradients(zip(gradients, trainable_vars))
 
+        self.loss_total_tracker.update_state(loss)
         self.loss_residual_tracker.update_state(loss_residual)
         self.loss_boundary_tracker.update_state(loss_boundary)
         self.mae_tracker.update_state(y[0], u_samples)
 
+
+        return {m.name: m.result() for m in self.metrics}
+    
+    def test_step(self, data):
+        '''
+        Performs a test step on the given data.
+        '''
+        x, y = data
+
+        u_samples, lhs_samples, u_bnd = self(x, training=False)
+        loss_residual = self.res_loss(y[1], lhs_samples)
+        loss_boundary = self.bnd_loss(y[2], u_bnd)
+        loss = self._loss_residual_weight * loss_residual + self._loss_boundary_weight * loss_boundary
+
+        self.loss_total_tracker.update_state(loss)
+        self.loss_residual_tracker.update_state(loss_residual)
+        self.loss_boundary_tracker.update_state(loss_boundary)
+        self.mae_tracker.update_state(y[0], u_samples)
 
         return {m.name: m.result() for m in self.metrics}
 
@@ -201,7 +222,7 @@ class AdvectionPinn(tf.keras.Model):
         '''
         Returns the metrics of the model.
         '''
-        return [self.loss_boundary_tracker, self.loss_residual_tracker, self.mae_tracker]
+        return [self.loss_total_tracker, self.loss_residual_tracker, self.loss_boundary_tracker, self.mae_tracker]
 
 
 class PoissonPinn(tf.keras.Model):
@@ -229,6 +250,7 @@ class PoissonPinn(tf.keras.Model):
         """
         super().__init__(**kwargs)
         self.backbone = backbone
+        self.loss_total_tracker = tf.keras.metrics.Mean(name=LOSS_TOTAL)
         self.loss_boundary_tracker = tf.keras.metrics.Mean(name=LOSS_BOUNDARY)
         self.loss_residual_tracker = tf.keras.metrics.Mean(name=LOSS_RESIDUAL)
         self.mae_tracker = tf.keras.metrics.MeanAbsoluteError(name=MEAN_ABSOLUTE_ERROR)
@@ -309,6 +331,28 @@ class PoissonPinn(tf.keras.Model):
         gradients = tape.gradient(loss, trainable_vars)
         self.optimizer.apply_gradients(zip(gradients, trainable_vars))
 
+        self.loss_total_tracker.update_state(loss)
+        self.loss_residual_tracker.update_state(loss_residual)
+        self.loss_boundary_tracker.update_state(loss_boundary)
+        self.mae_tracker.update_state(u_exact, u_samples)
+
+        return {m.name: m.result() for m in self.metrics}
+    
+    def test_step(self, data):
+        """
+        Performs a test step on the given data.
+        """
+
+        inputs, outputs = data
+        u_exact, rhs_exact, u_bnd_exact = outputs
+
+        # compute residual loss with samples
+        u_samples, lhs_samples, u_bnd = self(inputs, training=False)
+        loss_residual = self.res_loss(rhs_exact, lhs_samples)
+        loss_boundary = self.bnd_loss(u_bnd_exact, u_bnd)
+        loss = self._loss_residual_weight * loss_residual + self._loss_boundary_weight * loss_boundary
+
+        self.loss_total_tracker.update_state(loss)
         self.loss_residual_tracker.update_state(loss_residual)
         self.loss_boundary_tracker.update_state(loss_boundary)
         self.mae_tracker.update_state(u_exact, u_samples)
@@ -346,8 +390,7 @@ class PoissonPinn(tf.keras.Model):
         '''
         Returns the metrics of the model.
         '''
-        return [self.loss_boundary_tracker, self.loss_residual_tracker, self.mae_tracker]
-
+        return [self.loss_total_tracker, self.loss_residual_tracker, self.loss_boundary_tracker, self.mae_tracker]
 
 class SchrodingerPinn(tf.keras.Model):
     """
@@ -381,6 +424,7 @@ class SchrodingerPinn(tf.keras.Model):
         super().__init__(**kwargs)
         self.backbone = backbone
         self.k = k
+        self.loss_total_tracker = tf.keras.metrics.Mean(name=LOSS_TOTAL)
         self.loss_boundary_tracker = tf.keras.metrics.Mean(name=LOSS_BOUNDARY)
         self.loss_initial_tracker = tf.keras.metrics.Mean(name=LOSS_INITIAL)
         self.loss_residual_tracker = tf.keras.metrics.Mean(name=LOSS_RESIDUAL)
@@ -491,6 +535,33 @@ class SchrodingerPinn(tf.keras.Model):
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
+        self.loss_total_tracker.update_state(loss)
+        self.loss_residual_tracker.update_state(loss_residual)
+        self.loss_initial_tracker.update_state(loss_initial)
+        self.loss_boundary_tracker.update_state(loss_boundary)
+        self.mae_tracker.update_state(h_samples_exact, h_samples)
+
+        return {m.name: m.result() for m in self.metrics}
+    
+    def test_step(self, data):
+
+        inputs, outputs = data
+        tx_samples, tx_initial, txx_bnd = inputs
+        tx_bnd_start = tf.concat([txx_bnd[:, 0:1], txx_bnd[:, 1:2]], axis=1)
+        tx_bnd_end = tf.concat([txx_bnd[:, 0:1], txx_bnd[:, 2:3]], axis=1)
+        h_samples_exact, rhs_samples_exact, h_initial_exact = outputs
+
+        h_samples, lhs_samples, h_initial, h_bnd_start, h_bnd_end, dh_dx_start, dh_dx_end = \
+            self([tx_samples, tx_initial, tx_bnd_start, tx_bnd_end], training=False)
+        loss_residual = self.res_loss(rhs_samples_exact, lhs_samples)
+        loss_initial = self.init_loss(h_initial_exact, h_initial)
+        loss_boundary_h = self.bnd_loss(h_bnd_start, h_bnd_end)
+        loss_boundary_dh_dx = self.bnd_loss(dh_dx_start, dh_dx_end)
+        loss_boundary = loss_boundary_h + loss_boundary_dh_dx
+        loss = self._loss_residual_weight * loss_residual + self._loss_initial_weight * loss_initial + \
+            self._loss_boundary_weight * loss_boundary
+
+        self.loss_total_tracker.update_state(loss)
         self.loss_residual_tracker.update_state(loss_residual)
         self.loss_initial_tracker.update_state(loss_initial)
         self.loss_boundary_tracker.update_state(loss_boundary)
@@ -529,7 +600,7 @@ class SchrodingerPinn(tf.keras.Model):
         """
         Returns the metrics of the model.
         """
-        return [self.loss_residual_tracker, self.loss_initial_tracker, self.loss_boundary_tracker, self.mae_tracker]
+        return [self.loss_total_tracker, self.loss_residual_tracker, self.loss_initial_tracker, self.loss_boundary_tracker, self.mae_tracker]
 
 
 class BurgersPinn(tf.keras.Model):
@@ -553,6 +624,7 @@ class BurgersPinn(tf.keras.Model):
 
         self.backbone = backbone
         self.nu = nu
+        self.loss_total_tracker = tf.keras.metrics.Mean(name=LOSS_TOTAL)
         self.loss_residual_tracker = tf.keras.metrics.Mean(name=LOSS_RESIDUAL)
         self.loss_initial_tracker = tf.keras.metrics.Mean(name=LOSS_INITIAL)
         self.loss_boundary_tracker = tf.keras.metrics.Mean(name=LOSS_BOUNDARY)
@@ -647,6 +719,31 @@ class BurgersPinn(tf.keras.Model):
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
+        self.loss_total_tracker.update_state(loss)
+        self.mae_tracker.update_state(u_samples_exact, u_samples)
+        self.loss_residual_tracker.update_state(loss_residual)
+        self.loss_initial_tracker.update_state(loss_initial)
+        self.loss_boundary_tracker.update_state(loss_boundary)
+
+        return {m.name: m.result() for m in self.metrics}
+    
+    def test_step(self, data):
+        """
+        Performs a test step.
+        """
+
+        inputs, outputs = data
+        u_samples_exact, rhs_samples_exact, u_initial_exact, u_bnd_exact = outputs
+
+        u_samples, lhs_samples, u_initial, u_bnd = self(inputs, training=False)
+
+        loss_residual = self.res_loss(rhs_samples_exact, lhs_samples)
+        loss_initial = self.init_loss(u_initial_exact, u_initial)
+        loss_boundary = self.bnd_loss(u_bnd_exact, u_bnd)
+        loss = self._loss_residual_weight * loss_residual + self._loss_initial_weight * loss_initial + \
+            self._loss_boundary_weight * loss_boundary
+
+        self.loss_total_tracker.update_state(loss)
         self.mae_tracker.update_state(u_samples_exact, u_samples)
         self.loss_residual_tracker.update_state(loss_residual)
         self.loss_initial_tracker.update_state(loss_initial)
@@ -685,7 +782,7 @@ class BurgersPinn(tf.keras.Model):
         """
         Returns the metrics of the model.
         """
-        return [self.loss_residual_tracker, self.loss_initial_tracker, self.loss_boundary_tracker, self.mae_tracker]
+        return [self.loss_total_tracker, self.loss_residual_tracker, self.loss_initial_tracker, self.loss_boundary_tracker, self.mae_tracker]
 
 
 class HeatPinn(tf.keras.Model):
@@ -709,6 +806,7 @@ class HeatPinn(tf.keras.Model):
 
         self.backbone = backbone
         self.k = k
+        self.loss_total_tracker = tf.keras.metrics.Mean(name=LOSS_TOTAL)
         self.loss_residual_tracker = tf.keras.metrics.Mean(name=LOSS_RESIDUAL)
         self.loss_initial_tracker = tf.keras.metrics.Mean(name=LOSS_INITIAL)
         self.loss_boundary_tracker = tf.keras.metrics.Mean(name=LOSS_BOUNDARY)
@@ -800,6 +898,37 @@ class HeatPinn(tf.keras.Model):
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
+        self.loss_total_tracker.update_state(loss)
+        self.mae_tracker.update_state(u_samples_exact, u_samples)
+        self.loss_residual_tracker.update_state(loss_residual)
+        self.loss_initial_tracker.update_state(loss_initial)
+        self.loss_boundary_tracker.update_state(loss_boundary)
+
+        return {m.name: m.result() for m in self.metrics}
+    
+    def test_step(self, data):
+        """
+        Performs a test step.
+
+        Args:
+            data: The data to train on. First input is the samples, second input is the initial, \
+                and third input is the boundary data. First output is the exact solution for the samples, \
+                second output is the exact rhs for the samples, third output is the exact solution for the initial, \
+                and fourth output is the exact solution for the boundary.
+        """
+
+        inputs, outputs = data
+        u_samples_exact, rhs_samples_exact, u_initial_exact, u_bnd_exact = outputs
+
+        u_samples, lhs_samples, u_initial, u_bnd = self(inputs, training=False)
+
+        loss_residual = self.res_loss(rhs_samples_exact, lhs_samples)
+        loss_initial = self.init_loss(u_initial_exact, u_initial)
+        loss_boundary = self.bnd_loss(u_bnd_exact, u_bnd)
+        loss = self._loss_residual_weight * loss_residual + self._loss_initial_weight * loss_initial + \
+            self._loss_boundary_weight * loss_boundary
+
+        self.loss_total_tracker.update_state(loss)
         self.mae_tracker.update_state(u_samples_exact, u_samples)
         self.loss_residual_tracker.update_state(loss_residual)
         self.loss_initial_tracker.update_state(loss_initial)
@@ -838,8 +967,7 @@ class HeatPinn(tf.keras.Model):
         """
         Returns the metrics of the model.
         """
-        return [self.loss_residual_tracker, self.loss_initial_tracker, self.loss_boundary_tracker, self.mae_tracker]
-
+        return [self.loss_total_tracker, self.loss_residual_tracker, self.loss_initial_tracker, self.loss_boundary_tracker, self.mae_tracker]
 
 class WavePinn(tf.keras.Model):
     """
@@ -861,6 +989,7 @@ class WavePinn(tf.keras.Model):
         super().__init__(**kwargs)
         self.backbone = backbone
         self.c = c
+        self.loss_total_tracker = tf.keras.metrics.Mean(name=LOSS_TOTAL)
         self.loss_residual_tracker = tf.keras.metrics.Mean(name=LOSS_RESIDUAL)
         self.loss_initial_tracker = tf.keras.metrics.Mean(name=LOSS_INITIAL)
         self.loss_boundary_tracker = tf.keras.metrics.Mean(name=LOSS_BOUNDARY)
@@ -953,7 +1082,32 @@ class WavePinn(tf.keras.Model):
 
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+        
+        self.loss_total_tracker.update_state(loss)
+        self.mae_tracker.update_state(u_samples_exact, u_samples)
+        self.loss_residual_tracker.update_state(loss_residual)
+        self.loss_initial_tracker.update_state(loss_initial)
+        self.loss_boundary_tracker.update_state(loss_boundary)
 
+        return {m.name: m.result() for m in self.metrics}
+    
+    def test_step(self, data):
+        """
+        Performs a test step.
+        """
+        inputs, outputs = data
+        u_samples_exact, rhs_samples_exact, u_initial_exact, du_dt_init_exact, u_bnd_exact = outputs
+
+        u_samples, lhs_samples, u_initial, du_dt_init, u_bnd = self(inputs, training=False)
+        loss_residual = self.res_loss(rhs_samples_exact, lhs_samples)
+        loss_initial_neumann = self.init_loss(du_dt_init_exact, du_dt_init)
+        loss_initial_dirichlet = self.init_loss(u_initial_exact, u_initial)
+        loss_initial = loss_initial_neumann + loss_initial_dirichlet
+        loss_boundary = self.bnd_loss(u_bnd_exact, u_bnd)
+        loss = self._loss_residual_weight * loss_residual + self._loss_initial_weight * loss_initial + \
+            self._loss_boundary_weight * loss_boundary
+
+        self.loss_total_tracker.update_state(loss)
         self.mae_tracker.update_state(u_samples_exact, u_samples)
         self.loss_residual_tracker.update_state(loss_residual)
         self.loss_initial_tracker.update_state(loss_initial)
@@ -992,7 +1146,7 @@ class WavePinn(tf.keras.Model):
         """
         Returns the metrics of the model.
         """
-        return [self.loss_residual_tracker, self.loss_initial_tracker, self.loss_boundary_tracker, self.mae_tracker]
+        return [self.loss_total_tracker, self.loss_residual_tracker, self.loss_initial_tracker, self.loss_boundary_tracker, self.mae_tracker]
 
 class ReactionDiffusionPinn(tf.keras.Model):
     """
@@ -1031,6 +1185,7 @@ class ReactionDiffusionPinn(tf.keras.Model):
         self._nu = nu
         self._R = reaction_function if reaction_function is not None else \
             ReactionDiffusionPinn.get_fisher_reaction_function()
+        self.loss_total_tracker = tf.keras.metrics.Mean(name=LOSS_TOTAL)
         self.loss_residual_tracker = tf.keras.metrics.Mean(name=LOSS_RESIDUAL)
         self.loss_initial_tracker = tf.keras.metrics.Mean(name=LOSS_INITIAL)
         self.loss_boundary_tracker = tf.keras.metrics.Mean(name=LOSS_BOUNDARY)
@@ -1118,6 +1273,35 @@ class ReactionDiffusionPinn(tf.keras.Model):
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
+        self.loss_total_tracker.update_state(loss)
+        self.mae_tracker.update_state(u_exact_colloc, u_colloc)
+        self.loss_residual_tracker.update_state(loss_res)
+        self.loss_initial_tracker.update_state(loss_init)
+        self.loss_boundary_tracker.update_state(loss_bnd)
+
+        return {m.name: m.result() for m in self.metrics}
+    
+    def test_step(self, data):
+        """
+        Performs a test step.
+
+        Args:
+            data: The data to test on.
+
+        Returns:
+            The metrics of the model.
+        """
+        x, y = data
+        u_exact_colloc, residual_exact, u_initial_exact, u_bnd_exact = y
+
+        u_colloc, residual, u_init, u_bnd = self(x, training=False)
+        loss_res = self.res_loss(residual_exact, residual)
+        loss_init = self.init_loss(u_initial_exact, u_init)
+        loss_bnd = self.bnd_loss(u_bnd_exact, u_bnd)
+        loss = self._loss_residual_weight * loss_res + self._loss_initial_weight * loss_init + \
+                 self._loss_boundary_weight * loss_bnd
+
+        self.loss_total_tracker.update_state(loss)
         self.mae_tracker.update_state(u_exact_colloc, u_colloc)
         self.loss_residual_tracker.update_state(loss_res)
         self.loss_initial_tracker.update_state(loss_init)
@@ -1156,7 +1340,7 @@ class ReactionDiffusionPinn(tf.keras.Model):
         """
         Returns the metrics of the model.
         """
-        return [self.loss_residual_tracker, self.loss_initial_tracker, self.loss_boundary_tracker, self.mae_tracker]
+        return [self.loss_total_tracker, self.loss_residual_tracker, self.loss_initial_tracker, self.loss_boundary_tracker, self.mae_tracker]
 
 class KleinGordonEquation(tf.keras.Model):
     '''
@@ -1185,6 +1369,7 @@ class KleinGordonEquation(tf.keras.Model):
                                                 name="loss_initial_weight")
         self._loss_boundary_weight = tf.Variable(loss_boundary_weight, trainable=False, dtype=tf.keras.backend.floatx(), \
                                                  name="loss_boundary_weight")
+        self.loss_total_tracker = tf.keras.metrics.Mean(name=LOSS_TOTAL)
         self.loss_residual_tracker = tf.keras.metrics.Mean(name=LOSS_RESIDUAL)
         self.loss_initial_tracker = tf.keras.metrics.Mean(name=LOSS_INITIAL)
         self.loss_boundary_tracker = tf.keras.metrics.Mean(name=LOSS_BOUNDARY)
@@ -1265,6 +1450,7 @@ class KleinGordonEquation(tf.keras.Model):
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
         
+        self.loss_total_tracker.update_state(loss)
         self.loss_residual_tracker.update_state(loss_residual)
         self.loss_initial_tracker.update_state(loss_initial)
         self.loss_boundary_tracker.update_state(loss_boundary)
@@ -1272,6 +1458,28 @@ class KleinGordonEquation(tf.keras.Model):
         
         return {m.name: m.result() for m in self.metrics}
     
+    def test_step(self, data):
+        """
+        Performs a test step.
+        """
+        
+        inputs, outputs = data
+        u_colloc, residual, u_init, u_t_init, u_bnd = outputs
+        
+        u_colloc_pred, residual_pred, u_init_pred, u_t_init_pred, u_bnd_pred = self(inputs, training=True)
+        loss_residual = self.res_loss(residual, residual_pred)
+        loss_initial = self.init_loss(u_init, u_init_pred) + self.init_loss(u_t_init, u_t_init_pred)
+        loss_boundary = self.bnd_loss(u_bnd, u_bnd_pred)
+        loss = self._loss_residual_weight * loss_residual + self._loss_initial_weight * loss_initial + self._loss_boundary_weight * loss_boundary
+        
+        self.loss_total_tracker.update_state(loss)
+        self.loss_residual_tracker.update_state(loss_residual)
+        self.loss_initial_tracker.update_state(loss_initial)
+        self.loss_boundary_tracker.update_state(loss_boundary)
+        self.mae_tracker.update_state(u_colloc, u_colloc_pred)    
+
+        return {m.name: m.result() for m in self.metrics}
+
     def fit_custom(self, inputs: List['tf.Tensor'], outputs: List['tf.Tensor'], epochs: int, print_every: int = 1000):
         '''
         Custom alternative to tensorflow fit function, mainly to allow inputs with different sizes. Training is done in full batches.
@@ -1300,5 +1508,5 @@ class KleinGordonEquation(tf.keras.Model):
     
     @property
     def metrics(self):
-        return [self.loss_residual_tracker, self.loss_initial_tracker, self.loss_boundary_tracker, self.mae_tracker]
+        return [self.loss_total_tracker, self.loss_residual_tracker, self.loss_initial_tracker, self.loss_boundary_tracker, self.mae_tracker]
     
