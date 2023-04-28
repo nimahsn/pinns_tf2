@@ -136,3 +136,6 @@ dmypy.json
 playground.ipynb
 
 .idea/
+
+# ignore hdf5 files
+*.hdf5
