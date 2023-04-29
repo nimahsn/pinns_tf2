@@ -13,16 +13,20 @@ def simulate_burgers(n_samples, init_function=None, boundary_function=None, n_in
 
     Args:
         n_samples (int): number of samples to generate
-        init_function (function, optional): Function that returns the initial condition of the burgers equation. If None, sin(pi*x) is used. Defaults to None.
-        boundary_function (function, optional): Function that returns the boundary condition of the burgers equation. If None, 0 is used. Defaults to None.
-        boundary_samples (int, optional): number of boundary samples to generate. If None, then boundary_samples = n_samples. Defaults to None.
+        init_function (function, optional): Function that returns the initial condition of the burgers equation. \
+            If None, sin(pi*x) is used. Defaults to None.
+        boundary_function (function, optional): Function that returns the boundary condition of the burgers equation. \
+            If None, 0 is used. Defaults to None.
+        boundary_samples (int, optional): number of boundary samples to generate. If None, then boundary_samples = n_samples. \
+            Defaults to None.
         n_init (int, optional): number of initial samples to generate. If None, then n_init = n_samples. Defaults to None.
         n_bndry (int, optional): number of boundary samples to generate. If None, then n_bndry = n_samples. Defaults to None.
         random_seed (int, optional): Random seed for reproducibility. Defaults to 42.
         dtype (tf.dtype, optional): Data type of the samples. Defaults to tf.float32.
 
     returns:
-        tf.Tensor: Samples of the burgers equation. If training = True, returns a tuple of tensors (equation_samples, initial_samples, n_samples).
+        tf.Tensor: Samples of the burgers equation. If training = True, returns a tuple of tensors (equation_samples, initial_samples, \
+            n_samples).
     """
 
     if n_init is None:
@@ -59,7 +63,8 @@ def simulate_burgers(n_samples, init_function=None, boundary_function=None, n_in
 
 
 def simulate_wave(n_samples, phi_function, psi_function, boundary_function, x_start=0.0, length=1.0, time=1.0, n_init=None, n_bndry=None, \
-    random_seed=42, dtype = tf.float32) -> Tuple[Tuple[tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tensor]]:
+    random_seed=42, dtype = tf.float32) -> Tuple[Tuple[tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tensor, tf.Tensor], 
+                                                 Tuple[tf.Tensor, tf.Tensor]]:
     """
     Simulate the wave equation in 1D or 2D with a given initial condition and Dirichlet boundary conditions.
     Args:
@@ -78,7 +83,8 @@ def simulate_wave(n_samples, phi_function, psi_function, boundary_function, x_st
         dtype (tf.dtype, optional): Data type of the samples. Defaults to tf.float32.
 
     Returns:
-        tuple[tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor]]: Samples of the wave equation. Returns a tuple of tensors (equation_samples, initial_samples, boundary_samples).
+        tuple[tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor]]: Samples of the wave equation. \
+            Returns a tuple of tensors (equation_samples, initial_samples, boundary_samples).
     
     """
     if n_init is None:
@@ -126,7 +132,8 @@ def simulate_heat(n_samples, phi_function, boundary_function, length, time, n_in
         dtype (tf.dtype, optional): Data type of the samples. Defaults to tf.float32.
 
     Returns:
-        tuple[tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor]]: Samples of the heat equation. Returns a tuple of tensors (equation_samples, initial_samples, boundary_samples).
+        tuple[tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor], tuple[tf.Tensor, tf.Tensor]]: Samples of the heat equation. \
+            Returns a tuple of tensors (equation_samples, initial_samples, boundary_samples).
     """
     if n_init is None:
         n_init = n_samples
@@ -231,7 +238,8 @@ def simulate_schrodinger(n_samples, init_function, x_start, length, time, n_init
 
     Returns:
         Tuple[Tuple[tf.tensor, tf.tensor], Tuple[tf.tensor, tf.tensor], tf.tensor]: Tuple of tuples of tensors. \
-            The first tuple contains the equation samples, the second tuple the initial condition samples and the third tensor the boundary condition samples. \
+            The first tuple contains the equation samples, the second tuple the initial condition samples and the third tensor the \
+                boundary condition samples.
     """
     if n_init is None:
         n_init = n_samples
@@ -257,7 +265,8 @@ def simulate_schrodinger(n_samples, init_function, x_start, length, time, n_init
     return (tx_eqn, y_eqn), (tx_init, y_init), txx_boundary
 
 def simulate_reaction_diffusion(n_samples, n_init, n_boundary, solver_function, u0, nu, rho, x_start=0.0, length=2*np.pi, time=1.0,
-                                time_steps=200, x_steps=256, interior_only = True, add_bnd = False, return_mesh=True, random_seed=42, dtype=tf.float32):
+                                time_steps=200, x_steps=256, interior_only = True, add_bnd = False, return_mesh=True, random_seed=42,
+                                  dtype=tf.float32):
     """
     Simulate the reaction diffusion equation in 1D with dirichlet initial and boundary condition.
     Args:
@@ -330,8 +339,8 @@ def simulate_reaction_diffusion(n_samples, n_init, n_boundary, solver_function, 
         return (tx_samples, u_samples, samples_residuals), (tx_init, u_init), (tx_boundary, u_boundary), (X, T, U)
     return (tx_samples, u_samples, samples_residuals), (tx_init, u_init), (tx_boundary, u_boundary)
 
-def simulate_klein_gordon(n_colloc, n_init, n_bnd, rhs_function=None, init_function=None, bnd_function=None, init_ut_function=None, x_start=0.0, length=1.0, \
-                          time=1.0, dtype=tf.float32, random_seed=42):
+def simulate_klein_gordon(n_colloc, n_init, n_bnd, rhs_function=None, init_function=None, bnd_function=None, init_ut_function=None, 
+                          x_start=0.0, length=1.0, time=1.0, dtype=tf.float32, random_seed=42):
     """
     Simulate the Klein Gordon equation in 1D with dirichlet-neuman initial and dirichlet boundary condition.
 
@@ -342,7 +351,8 @@ def simulate_klein_gordon(n_colloc, n_init, n_bnd, rhs_function=None, init_funct
         rhs_function (function, optional): Function that returns the right hand side of the PDE. Defaults to None. If None, zero is used.
         init_function (function, optional): Function that returns the initial condition. Defaults to None. If None, zero is used.
         bnd_function (function, optional): Function that returns the boundary condition. Defaults to None. If None, zero is used.
-        init_ut_function (function, optional): Function that returns the initial condition for the time derivative. Defaults to None. If None, zero is used.
+        init_ut_function (function, optional): Function that returns the initial condition for the time derivative. Defaults to None. \
+            If None, zero is used.
         x_start (float, optional): Start of the boundary. Defaults to 0.0.
         length (float, optional): Length of the domain. Defaults to 1.0.
         time (float, optional): Time of the simulation. Defaults to 1.0.
@@ -376,4 +386,64 @@ def simulate_klein_gordon(n_colloc, n_init, n_bnd, rhs_function=None, init_funct
         u_bnd = bnd_function(tx_bnd)
 
     return (tx_colloc, rhs), (tx_init, u_init, ut_init), (tx_bnd, u_bnd)
+
+def simulate_transport(n_samples, n_init, n_boundary, solver_function, beta, u0='sin(x)', length=2*np.pi, time=1.0,
+                                time_steps=100, x_steps=256, interior_only = True, add_bnd = False, return_mesh=True, random_seed=42,
+                                  dtype=tf.float32):
+    dx = length / x_steps
+    dt = time / time_steps
+    x = np.arange(0, length, dx) # not inclusive of the last point
+    t = np.linspace(0, time, time_steps)
+    #convert to tf
+    x = tf.convert_to_tensor(x, dtype=dtype)
+    t = tf.convert_to_tensor(t, dtype=dtype)
+    X, T = tf.meshgrid(x, t)
+    U = solver_function(u0, 0.0, beta, 0, x_steps, time_steps)
+    # convert u to tf
+    U = tf.convert_to_tensor(U, dtype=dtype)
+    U = tf.reshape(U, X.shape)
+
+    if not interior_only:
+        tx_samples = tf.concat((tf.reshape(T, (-1, 1)), tf.reshape(X, (-1, 1))), axis=1)
+        u_samples = tf.reshape(U, (-1, 1))
+    else:
+        X_no_bnd = X[1:, 1:]
+        T_no_init = T[1:, 1:]
+        U_no_bnd_init = U[1:, 1:]
+        tx_samples = tf.concat((tf.reshape(T_no_init, (-1, 1)), tf.reshape(X_no_bnd, (-1, 1))), axis=1)
+        u_samples = tf.reshape(U_no_bnd_init, (-1, 1))
+
+    x_boundary_start = tf.reshape(X[:, 0], (-1, 1))
+    x_boundary_end = tf.reshape([length] * time_steps, (-1, 1))
+    u_boundary = tf.reshape(U[:, 0], (-1, 1)) # exact solution for start and end of the domain. Boundary condition is periodic, so the end is the same as the start
+    tx_bnd_start = tf.concat((t[:, None], x_boundary_start), axis=1)
+    tx_bnd_end = tf.concat((t[:, None], x_boundary_end), axis=1)
+
+    t_init = tf.zeros((x_steps, 1), dtype=dtype)
+    tx_init = tf.concat((t_init, x[:, None]), axis=1)
+    u_init = tf.reshape(U[0, :], (-1, 1))
+
+    #sample points
+    samples_indices = tf.random.shuffle(tf.range(tf.shape(tx_samples)[0], dtype=tf.int32), seed=random_seed)[:n_samples]
+    boundary_indices = tf.random.shuffle(tf.range(tf.shape(tx_bnd_start)[0], dtype=tf.int32), seed=random_seed)[:n_boundary]
+    init_indices = tf.random.shuffle(tf.range(tf.shape(tx_init)[0], dtype=tf.int32), seed=random_seed)[:n_init]
+
+    tx_samples = tf.gather(tx_samples, samples_indices)
+    u_samples = tf.gather(u_samples, samples_indices)
+    samples_residuals = tf.zeros_like(u_samples, dtype=dtype)
+    tx_bnd_start = tf.gather(tx_bnd_start, boundary_indices)
+    tx_bnd_end = tf.gather(tx_bnd_end, boundary_indices)
+    u_boundary = tf.gather(u_boundary, boundary_indices)
+    tx_init = tf.gather(tx_init, init_indices)
+    u_init = tf.gather(u_init, init_indices)
+
+    if add_bnd:
+        tx_samples = tf.concat((tx_samples, tx_init, tx_bnd_start, tx_bnd_end), axis=0)
+        u_samples = tf.concat((u_samples, u_init, u_boundary, u_boundary), axis=0)
+        samples_residuals = tf.concat((samples_residuals, tf.zeros_like(u_init, dtype=dtype), 
+                                       tf.zeros_like(u_boundary, dtype=dtype), tf.zeros_like(u_boundary, dtype=dtype)), axis=0)
+
+    if return_mesh:
+        return (tx_samples, u_samples, samples_residuals), (tx_init, u_init), (tx_bnd_start, tx_bnd_end, u_boundary), (X, T, U)
+    return (tx_samples, u_samples, samples_residuals), (tx_init, u_init), (tx_bnd_start, tx_bnd_end, u_boundary)
 

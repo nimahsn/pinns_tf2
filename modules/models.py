@@ -1510,7 +1510,7 @@ class KleinGordonEquation(tf.keras.Model):
     def metrics(self):
         return [self.loss_total_tracker, self.loss_residual_tracker, self.loss_initial_tracker, self.loss_boundary_tracker, self.mae_tracker]
     
-class TrasnportEquation(tf.keras.models.Model):
+class TransportEquation(tf.keras.models.Model):
     """
     One dimensional Transport (Convection) Equation model.
     """
@@ -1576,8 +1576,8 @@ class TrasnportEquation(tf.keras.models.Model):
             tape.watch(tx_colloc)
             u_colloc = self.backbone(tx_colloc, training=training)
         first_order = tape.batch_jacobian(u_colloc, tx_colloc)
-        u_t_colloc = first_order[:, 0]
-        u_x_colloc = first_order[:, 1]
+        u_t_colloc = first_order[..., 0]
+        u_x_colloc = first_order[..., 1]
         residual = u_t_colloc + self._beta * u_x_colloc
 
         u_init = self.backbone(tx_init, training=training)
@@ -1601,17 +1601,17 @@ class TrasnportEquation(tf.keras.models.Model):
         """
 
         x, y = data
-        tx_colloc, tx_init, txx_bnd = x
-        tx_bnd_start = tf.concat([txx_bnd[:, 0:1], txx_bnd[:, 1:2]], axis=1)
-        tx_bnd_end = tf.concat([txx_bnd[:, 0:1], txx_bnd[:, 2:3]], axis=1)
+        tx_colloc, tx_init, tx_bnd_start, tx_bnd_end = x
+        print(tx_bnd_start)
+        print(tx_bnd_end)
         u_colloc, residual, u_init = y
         with tf.GradientTape(persistent=False) as tape:
-            u_colloc_pred, residual_pred, u_init_pred, u_bnd_start, u_bnd_end = self(
+            u_colloc_pred, residual_pred, u_init_pred, u_bnd_start_pred, u_bnd_end_pred = self(
                 [tx_colloc, tx_init, tx_bnd_start, tx_bnd_end], 
                 training=True)
             loss_residual = self.res_loss(residual, residual_pred)
             loss_initial = self.init_loss(u_init, u_init_pred)
-            loss_boundary = self.bnd_loss(u_bnd_start, u_bnd_end)
+            loss_boundary = self.bnd_loss(u_bnd_start_pred, u_bnd_end_pred)
             loss_total = self._loss_residual_weight * loss_residual + self._loss_initial_weight * loss_initial \
                 + self._loss_boundary_weight * loss_boundary
         gards = tape.gradient(loss_total, self.trainable_variables)
@@ -1636,9 +1636,7 @@ class TrasnportEquation(tf.keras.models.Model):
         """
 
         x, y = data
-        tx_colloc, tx_init, txx_bnd = x
-        tx_bnd_start = tf.concat([txx_bnd[:, 0:1], txx_bnd[:, 1:2]], axis=1)
-        tx_bnd_end = tf.concat([txx_bnd[:, 0:1], txx_bnd[:, 2:3]], axis=1)
+        tx_colloc, tx_init, tx_bnd_start, tx_bnd_end = x
         u_colloc, residual, u_init = y
         u_colloc_pred, residual_pred, u_init_pred, u_bnd_start, u_bnd_end = self(
             [tx_colloc, tx_init, tx_bnd_start, tx_bnd_end])
