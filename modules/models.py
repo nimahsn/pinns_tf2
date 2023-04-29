@@ -21,6 +21,7 @@ def create_history_dictionary() -> dict:
         The history dictionary.
     """
     return {
+        LOSS_TOTAL: [],
         LOSS_BOUNDARY: [],
         LOSS_INITIAL: [],
         LOSS_RESIDUAL: [],
@@ -1602,8 +1603,6 @@ class TransportEquation(tf.keras.models.Model):
 
         x, y = data
         tx_colloc, tx_init, tx_bnd_start, tx_bnd_end = x
-        print(tx_bnd_start)
-        print(tx_bnd_end)
         u_colloc, residual, u_init = y
         with tf.GradientTape(persistent=False) as tape:
             u_colloc_pred, residual_pred, u_init_pred, u_bnd_start_pred, u_bnd_end_pred = self(
