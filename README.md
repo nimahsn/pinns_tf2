@@ -8,7 +8,8 @@ Impleneted equations are
 - Poisson,
 - Schrodinger's,
 - Burger's,
-- and Klein Gordon.
+- Klein Gordon.
+- and Transport.
 
 Examples of each equation are available in the notebooks. This implementation is not a general PDE solver, but you can write your own PINN model similarly.
 
