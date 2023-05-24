@@ -310,8 +310,6 @@ def simulate_reaction_diffusion(n_samples, n_init, n_boundary, solver_function, 
     u_boundary_end = tf.reshape(U[:, -1], (-1, 1))
     tx_boundary_start = tf.concat((t[:, None], x_boundary_start), axis=1)
     tx_boundary_end = tf.concat((t[:, None], x_boundary_end), axis=1)
-    tx_boundary = tf.concat((tx_boundary_start, tx_boundary_end), axis=0)
-    u_boundary = tf.concat((u_boundary_start, u_boundary_end), axis=0)
 
     t_init = tf.zeros((x_steps, 1), dtype=dtype)
     tx_init = tf.concat((t_init, x[:, None]), axis=1)
@@ -319,14 +317,18 @@ def simulate_reaction_diffusion(n_samples, n_init, n_boundary, solver_function, 
 
     #sample points
     samples_indices = tf.random.shuffle(tf.range(tf.shape(tx_samples)[0], dtype=tf.int32), seed=random_seed)[:n_samples]
-    boundary_indices = tf.random.shuffle(tf.range(tf.shape(tx_boundary)[0], dtype=tf.int32), seed=random_seed)[:n_boundary]
+    boundary_indices = tf.random.shuffle(tf.range(tf.shape(tx_boundary_start)[0], dtype=tf.int32), seed=random_seed)[:n_boundary]
     init_indices = tf.random.shuffle(tf.range(tf.shape(tx_init)[0], dtype=tf.int32), seed=random_seed)[:n_init]
 
     tx_samples = tf.gather(tx_samples, samples_indices)
     u_samples = tf.gather(u_samples, samples_indices)
     samples_residuals = tf.zeros_like(u_samples, dtype=dtype)
-    tx_boundary = tf.gather(tx_boundary, boundary_indices)
-    u_boundary = tf.gather(u_boundary, boundary_indices)
+    tx_boundary_start = tf.gather(tx_boundary_start, boundary_indices)
+    tx_boundary_end = tf.gather(tx_boundary_end, boundary_indices)
+    u_boundary_start = tf.gather(u_boundary_start, boundary_indices)
+    u_boundary_end = tf.gather(u_boundary_end, boundary_indices)
+    tx_boundary = tf.concat((tx_boundary_start, tx_boundary_end), axis=0)
+    u_boundary = tf.concat((u_boundary_start, u_boundary_end), axis=0)
     tx_init = tf.gather(tx_init, init_indices)
     u_init = tf.gather(u_init, init_indices)
 
@@ -336,8 +338,8 @@ def simulate_reaction_diffusion(n_samples, n_init, n_boundary, solver_function, 
         samples_residuals = tf.concat((samples_residuals, tf.zeros_like(u_init, dtype=dtype), tf.zeros_like(u_boundary, dtype=dtype)), axis=0)
 
     if return_mesh:
-        return (tx_samples, u_samples, samples_residuals), (tx_init, u_init), (tx_boundary, u_boundary), (X, T, U)
-    return (tx_samples, u_samples, samples_residuals), (tx_init, u_init), (tx_boundary, u_boundary)
+        return (tx_samples, u_samples, samples_residuals), (tx_init, u_init), (tx_boundary_start, tx_boundary_end, u_boundary), (X, T, U)
+    return (tx_samples, u_samples, samples_residuals), (tx_init, u_init), (tx_boundary_start, tx_boundary_end, u_boundary)      
 
 def simulate_klein_gordon(n_colloc, n_init, n_bnd, rhs_function=None, init_function=None, bnd_function=None, init_ut_function=None, 
                           x_start=0.0, length=1.0, time=1.0, dtype=tf.float32, random_seed=42):
