@@ -1226,9 +1226,7 @@ class ReactionDiffusionPinn(tf.keras.Model):
             The solution for the residual samples, the lhs residual, the solution for the initial samples, \
                 and the solution for the boundary samples.
         """
-        tx_samples = inputs[0]
-        tx_init = inputs[1]
-        tx_bnd = inputs[2]
+        tx_samples, tx_init, tx_bnd_start, tx_bnd_end = inputs
 
         with tf.GradientTape(watch_accessed_variables=False) as tape2:
             tape2.watch(tx_samples)
@@ -1242,12 +1240,14 @@ class ReactionDiffusionPinn(tf.keras.Model):
         d2u_dx2 = tape2.batch_jacobian(du_dx, tx_samples)[..., 1]
         residual = du_dt - self._nu * d2u_dx2 - self._R(u_samples)
 
-        tx_bi = tf.concat([tx_init, tx_bnd], axis=0)
-        u_bi = self.backbone(tx_bi, training=training)
-        u_init = u_bi[:tf.shape(tx_init)[0]]
-        u_bnd = u_bi[tf.shape(tx_init)[0]:]
+        u_init = self.backbone(tx_init, training=training)
 
-        return u_samples, residual, u_init, u_bnd
+        tx_bnd = tf.concat([tx_bnd_start, tx_bnd_end], axis=0)
+        u_bnd = self.backbone(tx_bnd, training=training)
+        u_bnd_start = u_bnd[:tf.shape(tx_bnd_start)[0]]
+        u_bnd_end = u_bnd[tf.shape(tx_bnd_start)[0]:]
+
+        return u_samples, residual, u_init, u_bnd_start, u_bnd_end
 
     @tf.function
     def train_step(self, data):
@@ -1261,13 +1261,13 @@ class ReactionDiffusionPinn(tf.keras.Model):
             The metrics of the model.
         """
         x, y = data
-        u_exact_colloc, residual_exact, u_initial_exact, u_bnd_exact = y
+        u_exact_colloc, residual_exact, u_initial_exact = y
 
         with tf.GradientTape() as tape:
-            u_colloc, residual, u_init, u_bnd = self(x, training=True)
+            u_colloc, residual, u_init, u_bnd_start, u_bnd_end = self(x, training=True)
             loss_res = self.res_loss(residual_exact, residual)
             loss_init = self.init_loss(u_initial_exact, u_init)
-            loss_bnd = self.bnd_loss(u_bnd_exact, u_bnd)
+            loss_bnd = self.bnd_loss(u_bnd_start, u_bnd_end)
             loss = self._loss_residual_weight * loss_res + self._loss_initial_weight * loss_init + \
                      self._loss_boundary_weight * loss_bnd
 
