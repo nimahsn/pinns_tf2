@@ -1293,12 +1293,12 @@ class ReactionDiffusionPinn(tf.keras.Model):
             The metrics of the model.
         """
         x, y = data
-        u_exact_colloc, residual_exact, u_initial_exact, u_bnd_exact = y
+        u_exact_colloc, residual_exact, u_initial_exact = y
 
-        u_colloc, residual, u_init, u_bnd = self(x, training=False)
+        u_colloc, residual, u_init, u_bnd_start, u_bnd_end = self(x, training=False)
         loss_res = self.res_loss(residual_exact, residual)
         loss_init = self.init_loss(u_initial_exact, u_init)
-        loss_bnd = self.bnd_loss(u_bnd_exact, u_bnd)
+        loss_bnd = self.bnd_loss(u_bnd_start, u_bnd_end)
         loss = self._loss_residual_weight * loss_res + self._loss_initial_weight * loss_init + \
                  self._loss_boundary_weight * loss_bnd
 
