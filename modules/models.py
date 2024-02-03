@@ -1293,12 +1293,12 @@ class ReactionDiffusionPinn(tf.keras.Model):
             The metrics of the model.
         """
         x, y = data
-        u_exact_colloc, residual_exact, u_initial_exact, u_bnd_exact = y
+        u_exact_colloc, residual_exact, u_initial_exact = y
 
-        u_colloc, residual, u_init, u_bnd = self(x, training=False)
+        u_colloc, residual, u_init, u_bnd_start, u_bnd_end = self(x, training=False)
         loss_res = self.res_loss(residual_exact, residual)
         loss_init = self.init_loss(u_initial_exact, u_init)
-        loss_bnd = self.bnd_loss(u_bnd_exact, u_bnd)
+        loss_bnd = self.bnd_loss(u_bnd_start, u_bnd_end)
         loss = self._loss_residual_weight * loss_res + self._loss_initial_weight * loss_init + \
                  self._loss_boundary_weight * loss_bnd
 
@@ -1690,4 +1690,170 @@ class TransportEquation(tf.keras.models.Model):
         """
         return [self.loss_total_tracker, self.loss_residual_tracker, self.loss_initial_tracker, \
             self.loss_boundary_tracker, self.mae_tracker]
+
+class Helmholtz2DPinn(tf.keras.Model):
+    """
+    A PINN for the Helmholtz equation in 2D.
+
+    Attributes:
+        backbone: The backbone model.
+        _k: The wave number.
+        _loss_residual_weight: The weight of the residual loss.
+        _loss_boundary_weight: The weight of the boundary loss.
+        loss_residual_tracker: The residual loss tracker.
+        loss_boundary_tracker: The boundary loss tracker.
+        mae_tracker: The mean absolute error tracker.
+    """
+
+    def __init__(self, backbone: tf.keras.Model, loss_residual_weight: float = 1.0, loss_boundary_weight: float = 1.0, **kwargs):
+        """
+        Initializes the model.
+
+        Args:
+            backbone: The backbone model.
+            loss_residual_weight: The weight of the residual loss.
+            loss_boundary_weight: The weight of the boundary loss.
+        """
+
+        super().__init__(**kwargs)
+        self.backbone = backbone
+        self.loss_total_tracker = tf.keras.metrics.Mean(name=LOSS_TOTAL)
+        self.loss_residual_tracker = tf.keras.metrics.Mean(name=LOSS_RESIDUAL)
+        self.loss_boundary_tracker = tf.keras.metrics.Mean(name=LOSS_BOUNDARY)
+        self.mae_tracker = tf.keras.metrics.MeanAbsoluteError(name=MEAN_ABSOLUTE_ERROR)
+        self._loss_residual_weight = tf.Variable(loss_residual_weight, trainable=False, name="loss_residual_weight",
+                                                 dtype=tf.keras.backend.floatx())
+        self._loss_boundary_weight = tf.Variable(loss_boundary_weight,
+                                                 trainable=False, name="loss_boundary_weight",
+                                                 dtype=tf.keras.backend.floatx())
+        self.res_loss = tf.keras.losses.MeanSquaredError()
+        self.bnd_loss = tf.keras.losses.MeanSquaredError()
+
+    @tf.function
+    def call(self, inputs, training=False):
+        """
+        Performs a forward pass.
+
+        Args:
+            inputs: The inputs to the model. First input is the samples, second input is the boundary data.
+            training: Whether or not the model is training.
+
+        Returns:
+            The solution for the residual samples, the lhs residual, and the solution for the boundary samples.
+        """
+        tx_samples, tx_bnd = inputs
+
+        with tf.GradientTape(watch_accessed_variables=False) as tape2:
+            tape2.watch(tx_samples)
+            
+            with tf.GradientTape(watch_accessed_variables=False) as tape:
+                tape.watch(tx_samples)
+                u_samples = self.backbone(tx_samples, training=training)
+            first_order = tape.batch_jacobian(u_samples, tx_samples)[:, 0, :] # (N, 2)
+        second_order = tape2.batch_jacobian(first_order, tx_samples)
+        u_xx = second_order[:, 0, 0:1]
+        u_yy = second_order[:, 1, 1:2]
+        residuals = u_xx + u_yy + u_samples
+
+        u_bnd = self.backbone(tx_bnd, training=training)
+
+        return u_samples, residuals, u_bnd
+    
+    @tf.function
+    def train_step(self, data):
+        """
+        Performs a training step.
+
+        Args:
+            data: The data to train on. Should be a list of tensors: [tx_colloc, tx_bnd]
+        """
+
+        inputs, outputs = data
+        u_samples_exact, rhs_samples_exact, u_bnd_exact = outputs
+
+        with tf.GradientTape() as tape:
+            u_samples, residuals, u_bnd = self(inputs, training=True)
+            loss_residual = self.res_loss(rhs_samples_exact, residuals)
+            loss_boundary = self.bnd_loss(u_bnd_exact, u_bnd)
+            loss = self._loss_residual_weight * loss_residual + self._loss_boundary_weight * loss_boundary
+
+        gradients = tape.gradient(loss, self.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+        
+        self.loss_total_tracker.update_state(loss)
+        self.mae_tracker.update_state(u_samples_exact, u_samples)
+        self.loss_residual_tracker.update_state(loss_residual)
+        self.loss_boundary_tracker.update_state(loss_boundary)
+
+        return {m.name: m.result() for m in self.metrics}
+    
+    def test_step(self, data):
+        """
+        Performs a test step.
+        """
+        inputs, outputs = data
+        u_samples_exact, rhs_samples_exact, u_bnd_exact = outputs
+
+        u_samples, residuals, u_bnd = self(inputs, training=False)
+        loss_residual = self.res_loss(rhs_samples_exact, residuals)
+        loss_boundary = self.bnd_loss(u_bnd_exact, u_bnd)
+        loss = self._loss_residual_weight * loss_residual + self._loss_boundary_weight * loss_boundary
+
+        self.loss_total_tracker.update_state(loss)
+        self.mae_tracker.update_state(u_samples_exact, u_samples)
+        self.loss_residual_tracker.update_state(loss_residual)
+        self.loss_boundary_tracker.update_state(loss_boundary)
+
+        return {m.name: m.result() for m in self.metrics}
+    
+    def fit_custom(self, inputs: List['tf.Tensor'], outputs: List['tf.Tensor'], epochs: int, print_every: int = 1000):
+        """
+        Custom alternative to tensorflow fit function, mainly to allow inputs with different sizes. Training is done in full batches.
+        
+        Args:
+            inputs: The inputs to the model. Should be a list of tensors: [tx_colloc, tx_init, tx_bnd]
+            outputs: The outputs to the model. Should be a list of tensors: [u_colloc, residual, u_init, u_bnd]
+            epochs: The number of epochs to train for.
+            print_every: The number of epochs between printing the loss. Defaults to 1000.
+
+        Returns:
+            A dictionary containing the history of the training.
+        """
+
+        history = create_history_dictionary()
+        
+        for epoch in range(epochs):
+            metrs = self.train_step([inputs, outputs])
+            for key, value in metrs.items():
+                history[key].append(value.numpy())
+
+            if epoch % print_every == 0:
+                tf.print(f"Epoch {epoch}, Loss Residual: {metrs['loss_residual']:0.4f}, Loss Boundary: {metrs['loss_boundary']:0.4f}, \
+                         MAE: {metrs['mean_absolute_error']:0.4f}")
+                
+            #reset metrics
+            for m in self.metrics:
+                m.reset_states()
+
+        return history
+
+    @property
+    def metrics(self):
+        """
+        Returns the metrics to track.
+        """
+        return [self.loss_total_tracker, self.loss_residual_tracker, self.loss_boundary_tracker, \
+                self.mae_tracker]
+    
+    def set_loss_weights(self, loss_residual_weight, loss_boundary_weight):
+        """
+        Sets the loss weights.
+
+        Args:
+            loss_residual_weight: The weight of the residual loss. Defaults to 1.
+            loss_initial_weight: The weight of the initial loss. Defaults to 1.
+            loss_boundary_weight: The weight of the boundary loss. Defaults to 1.
+        """
+        self._loss_residual_weight.assign(loss_residual_weight)
+        self._loss_boundary_weight.assign(loss_boundary_weight)
 
